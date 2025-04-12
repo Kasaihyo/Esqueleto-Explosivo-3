@@ -47,27 +47,27 @@ for symbol_pays in PAYTABLE.values():
 # Placeholder values - Requires tuning based on simulation target RTP.
 # Separate distributions needed for BG and FS (GDD 4.4)
 SYMBOL_GENERATION_WEIGHTS_BG = {
-    "LADY_SK": 60,
-    "PINK_SK": 90,
-    "GREEN_SK": 90,
-    "BLUE_SK": 90,
-    "ORANGE_SK": 90,
-    "CYAN_SK": 90,
-    "WILD": 6,
-    "E_WILD": 4,
-    "SCATTER": 10, # 
+    "LADY_SK": 100,
+    "PINK_SK": 250,
+    "GREEN_SK": 250,
+    "BLUE_SK": 300,
+    "ORANGE_SK": 354,
+    "CYAN_SK": 400,
+    "WILD": 32,
+    "E_WILD": 32,
+    "SCATTER": 15, 
 }
-# Placeholder for FS weights (Likely richer)
+
 SYMBOL_GENERATION_WEIGHTS_FS = {
-    "LADY_SK": 60,
-    "PINK_SK": 90,
-    "GREEN_SK": 90,
-    "BLUE_SK": 90,
-    "ORANGE_SK": 90,
-    "CYAN_SK": 90,
-    "WILD": 6,
-    "E_WILD": 4,
-    "SCATTER": 1, # 
+    "LADY_SK": 100,
+    "PINK_SK": 250,
+    "GREEN_SK": 250,
+    "BLUE_SK": 300,
+    "ORANGE_SK": 354,
+    "CYAN_SK": 400,
+    "WILD": 32,
+    "E_WILD": 32,
+    "SCATTER": 15, 
 }
 
 # --- Wild Spawning Probabilities ---

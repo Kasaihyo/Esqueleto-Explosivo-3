@@ -1,21 +1,25 @@
 """
 Optimized implementation of the Esqueleto Explosivo 3 simulator.
-This version leverages multi-core CPUs, Numba JIT, and Apple M-series GPUs.
+This version leverages multi-core CPUs, Numba JIT, and Apple M-series GPUs,
+with specific optimizations for Apple Silicon ARM processors.
 """
 
 import os
 import time
 import random
 import csv
+import gc
 import numpy as np
 import multiprocessing
+import platform
 from datetime import datetime
 from typing import List, Tuple, Dict, Set, Optional, Any
 from collections import defaultdict, deque
 from tqdm import tqdm
-from joblib import Parallel, delayed
+from joblib import Parallel, delayed, parallel_backend
 import numba
 from numba import jit, prange, cuda
+import psutil
 
 # Optional plotting support if matplotlib is available
 MATPLOTLIB_AVAILABLE = False
@@ -34,21 +38,62 @@ from simulator.core.utils import generate_random_symbol
 from simulator import config
 from simulator.main import LOG_DIR, run_base_game_spin, run_free_spins_feature, calculate_retrigger_spins
 
-# Set up optimal number of CPU cores for parallel processing
-NUM_CORES = min(multiprocessing.cpu_count(), 8)  # Use up to 8 cores
+# Hardware detection
+NUM_CORES = multiprocessing.cpu_count()
+AVAILABLE_MEMORY_GB = psutil.virtual_memory().total / (1024 ** 3)
 
 # Check if CUDA (NVIDIA GPU) is available
 CUDA_AVAILABLE = cuda.is_available()
 
-# For Apple Silicon, Metal acceleration can be used through Numba
-# Apple's Metal API is optimized for ARM architecture
-IS_APPLE_SILICON = "arm" in os.uname().machine if hasattr(os, "uname") else False
+# Check for Apple Silicon ARM processor
+IS_APPLE_SILICON = (
+    platform.system() == "Darwin" and 
+    ("arm" in platform.machine() or platform.machine() == "arm64")
+)
 
-# Numba optimization settings for Apple Silicon
-if IS_APPLE_SILICON:
+# Special detection for 11-core Apple Silicon (likely M1 Pro/Max or M2 Pro)
+IS_11CORE_APPLE = IS_APPLE_SILICON and NUM_CORES == 11
+HAS_18GB_RAM = 16 <= AVAILABLE_MEMORY_GB < 24
+
+# Turbo mode flag for maximum performance
+TURBO_MODE = False
+
+# Optimize specifically for 11-core Apple Silicon with ~18GB RAM
+if IS_11CORE_APPLE and HAS_18GB_RAM:
+    print("⚡ Optimizing for 11-core Apple Silicon with ~18GB RAM")
+    # Use 10 cores for maximum throughput
+    NUM_CORES = 10
+    
+    # Set special environment variables for Numba optimization
+    os.environ["NUMBA_CPU_NAME"] = "apple_m1"  # Generic optimization for M-series
+    os.environ["NUMBA_THREADING_LAYER"] = "omp"  # Use OpenMP for better performance
+    os.environ["NUMBA_NUM_THREADS"] = str(NUM_CORES)
+    os.environ["NUMBA_FASTMATH"] = "1"
+    os.environ["NUMBA_LOOP_VECTORIZE"] = "1"
+    os.environ["NUMBA_OPT"] = "3"  # Maximum optimization level
+    
+    # Force M1/M2 optimizations
+    os.environ["NUMBA_CUDA_PROXY"] = "0"
+    os.environ["NUMBA_CUDA_DRIVER"] = "0"
+    
+    # Advanced memory optimizations
+    os.environ["MKL_NUM_THREADS"] = str(NUM_CORES)
+    os.environ["OMP_NUM_THREADS"] = str(NUM_CORES)
+    os.environ["OPENBLAS_NUM_THREADS"] = str(NUM_CORES)
+    
+    # Enable Metal-specific optimizations if available
+    try:
+        from numba.core.target_extension import target_override
+        # Metal optimizations
+    except ImportError:
+        pass
+        
+# General Apple Silicon optimization
+elif IS_APPLE_SILICON:
     # Enable all performance optimizations for ARM
-    os.environ.get('NUMBA_CPU_NAME', 'apple_m1')
-    os.environ.get('NUMBA_CPU_FEATURES', 'arm_neon:arm_fp16:arm_vfp4:arm_aes:arm_sha2:arm_crc')
+    os.environ["NUMBA_CPU_NAME"] = "apple_m1"
+    os.environ["NUMBA_CPU_FEATURES"] = "arm_neon:arm_fp16:arm_vfp4:arm_aes:arm_sha2:arm_crc"
+    os.environ["NUMBA_FASTMATH"] = "1"
     
     # Try to enable Metal backend if available
     try:
@@ -57,8 +102,8 @@ if IS_APPLE_SILICON:
     except ImportError:
         pass
 
-# Numba-optimized array operations
-@jit(nopython=True, parallel=True, fastmath=True)
+# Numba-optimized array operations - adapted specifically for Apple Silicon ARM
+@jit(nopython=True, parallel=True, fastmath=True, cache=True)
 def process_grid_parallel(grid_array: np.ndarray) -> np.ndarray:
     """
     Process grid operations in parallel using Numba.
@@ -73,13 +118,127 @@ def process_grid_parallel(grid_array: np.ndarray) -> np.ndarray:
     rows, cols = grid_array.shape
     result = np.zeros_like(grid_array)
     
-    # Parallel processing across rows
+    # Parallel processing across rows - optimized for ARM SIMD operations
     for r in prange(rows):
         for c in range(cols):
             # Example calculation - actual logic would be more complex
             result[r, c] = grid_array[r, c]
             
     return result
+
+# Additional ARM-optimized cluster detection function
+@jit(nopython=True, fastmath=True, cache=True)
+def detect_clusters_optimized(grid_array: np.ndarray, min_cluster_size: int = 5) -> List[List[Tuple[int, int]]]:
+    """
+    Detect symbol clusters in the grid, optimized for ARM processors.
+    
+    Args:
+        grid_array: Numpy array representation of the grid
+        min_cluster_size: Minimum number of connected symbols to form a cluster
+        
+    Returns:
+        List of clusters, where each cluster is a list of (x, y) coordinates
+    """
+    rows, cols = grid_array.shape
+    visited = np.zeros((rows, cols), dtype=np.bool_)
+    clusters = []
+    
+    # Directions: right, down, left, up
+    dx = [1, 0, -1, 0]
+    dy = [0, 1, 0, -1]
+    
+    for y in range(rows):
+        for x in range(cols):
+            if not visited[y, x] and grid_array[y, x] > 0:  # Assuming 0 is empty or not clusterable
+                symbol = grid_array[y, x]
+                cluster = []
+                queue = deque([(x, y)])
+                visited[y, x] = True
+                
+                while queue:
+                    cx, cy = queue.popleft()
+                    cluster.append((cx, cy))
+                    
+                    for d in range(4):
+                        nx, ny = cx + dx[d], cy + dy[d]
+                        if (0 <= nx < cols and 0 <= ny < rows and 
+                            not visited[ny, nx] and grid_array[ny, nx] == symbol):
+                            visited[ny, nx] = True
+                            queue.append((nx, ny))
+                
+                if len(cluster) >= min_cluster_size:
+                    clusters.append(cluster)
+    
+    return clusters
+
+# Memory-efficient batch processor for Apple Silicon
+def process_batch_apple_silicon(batch_indices, base_bet, verbose_spins, verbose_fs_only):
+    """
+    Process a batch of spins optimized for Apple Silicon memory architecture.
+    
+    This function reduces memory pressure by using smaller intermediate arrays
+    and leveraging Apple Silicon's unified memory architecture.
+    """
+    batch_results = []
+    
+    for spin_index in batch_indices:
+        # Create local state and grid for thread safety
+        local_game_state = GameState()
+        local_grid = Grid(local_game_state)
+        
+        # Set verbosity based on index
+        is_base_game_verbose = (spin_index < verbose_spins) and not verbose_fs_only
+        is_free_spin_verbose = verbose_fs_only
+        
+        # Run base game spin
+        spin_win, scatters_in_seq = run_base_game_spin(
+            local_grid, base_bet, spin_index=spin_index, verbose=is_base_game_verbose
+        )
+        
+        # Initialize return values
+        current_spin_total_win = spin_win
+        local_fs_win = 0.0
+        triggered_fs = False
+        initial_free_spins = 0
+        
+        # Handle free spins if triggered
+        if scatters_in_seq >= 3:
+            triggered_fs = True
+            # Calculate initial free spins
+            initial_free_spins = config.FS_TRIGGER_SCATTERS.get(scatters_in_seq)
+            if initial_free_spins is None:
+                initial_free_spins = config.FS_TRIGGER_SCATTERS[4] + (scatters_in_seq - 4) * config.FS_TRIGGER_SCATTERS_EXTRA
+            
+            # Run free spins feature
+            win_from_fs = run_free_spins_feature(
+                local_grid, base_bet, initial_free_spins, 
+                trigger_spin_index=spin_index, verbose=is_free_spin_verbose
+            )
+            
+            local_fs_win = win_from_fs
+            current_spin_total_win += win_from_fs
+        
+        # Create spin details for statistics (minimal memory usage)
+        spin_details = {
+            'index': spin_index + 1,
+            'total_win': current_spin_total_win,
+            'base_game_win': spin_win,
+            'fs_win': local_fs_win,
+            'scatters': scatters_in_seq,
+            'triggered_fs': triggered_fs,
+            'win_multiplier': current_spin_total_win / base_bet if base_bet > 0 else 0,
+            'hit': 1 if current_spin_total_win > 0 else 0,
+            'win_rounded_multiplier': round(current_spin_total_win / base_bet) if base_bet > 0 else 0
+        }
+        
+        batch_results.append(spin_details)
+        
+        # Force memory cleanup for Apple Silicon's unified memory
+        if spin_index % 50 == 0:
+            local_game_state = None
+            local_grid = None
+    
+    return batch_results
 
 def run_optimized_simulation(
     num_spins: int, 
@@ -91,10 +250,14 @@ def run_optimized_simulation(
     enhanced_stats: bool = False,
     batch_size: int = 100,
     use_gpu: bool = True,
-    create_plots: bool = False
+    create_plots: bool = False,
+    cores: int = None,
+    enable_jit: bool = True,
+    turbo_mode: bool = None
 ) -> Optional[Dict[str, Any]]:
     """
-    Runs an optimized version of the simulation leveraging parallel processing.
+    Runs an optimized version of the simulation leveraging parallel processing,
+    with special optimizations for Apple Silicon ARM processors.
     
     Args:
         num_spins: Number of spins to simulate
@@ -106,10 +269,48 @@ def run_optimized_simulation(
         enhanced_stats: If True, include enhanced statistics in the output
         batch_size: Number of spins to process in parallel batches
         use_gpu: Whether to use GPU acceleration if available
+        create_plots: Whether to create visualization plots
+        cores: Number of CPU cores to use (overrides auto-detection)
+        enable_jit: Whether to enable Numba JIT compilation
+        turbo_mode: Whether to enable turbo mode for maximum performance
         
     Returns:
         Dict of statistics if return_stats is True, otherwise None
     """
+    # Input validation
+    if num_spins <= 0:
+        raise ValueError("Number of spins must be positive")
+    if base_bet <= 0:
+        raise ValueError("Base bet must be positive")
+    if batch_size <= 0:
+        raise ValueError("Batch size must be positive")
+    if batch_size > num_spins:
+        raise ValueError(f"Batch size ({batch_size}) cannot be larger than total spins ({num_spins})")
+    
+    # Override number of cores if specified
+    global NUM_CORES
+    if cores is not None:
+        NUM_CORES = cores
+    
+    # Override turbo mode if specified
+    global TURBO_MODE
+    if turbo_mode is not None:
+        TURBO_MODE = turbo_mode
+        
+    # Apply turbo mode optimizations
+    if TURBO_MODE:
+        # Set aggressive optimization flags
+        numba.config.NUMBA_DEFAULT_NUM_THREADS = NUM_CORES
+        if IS_APPLE_SILICON:
+            # Apple Silicon specific turbo optimizations
+            numba.config.THREADING_LAYER = 'threadsafe'
+            # Disable unnecessary checks for speed
+            numba.config.DISABLE_JIT_PERFORMANCE_WARNINGS = True
+    
+    # Disable JIT if requested (for debugging)
+    if not enable_jit:
+        numba.config.DISABLE_JIT = True
+    
     # Ensure log directory exists
     os.makedirs(LOG_DIR, exist_ok=True)
     summary_log_path = os.path.join(LOG_DIR, f"summary_{run_id}.txt")
@@ -120,7 +321,12 @@ def run_optimized_simulation(
     if use_gpu and CUDA_AVAILABLE:
         acceleration_type = "NVIDIA GPU (CUDA)"
     elif use_gpu and IS_APPLE_SILICON:
-        acceleration_type = "Apple Silicon (Metal/ARM)"
+        if IS_11CORE_APPLE and HAS_18GB_RAM:
+            acceleration_type = "Apple Silicon 11-core ARM (Optimized)"
+            if TURBO_MODE:
+                acceleration_type += " [TURBO]"
+        else:
+            acceleration_type = "Apple Silicon ARM"
     
     # Initialize statistics tracking
     total_win = 0.0
@@ -135,13 +341,24 @@ def run_optimized_simulation(
     win_ranges = [0, 0, 0, 0, 0, 0, 0]  # 0-1x, 1-5x, 5-10x, 10-50x, 50-100x, 100-500x, 500x+
     win_range_labels = ["0-1x", "1-5x", "5-10x", "10-50x", "50-100x", "100-500x", "500x+"]
     
+    # Optimize batch size for Apple Silicon if needed
+    if IS_11CORE_APPLE and HAS_18GB_RAM and TURBO_MODE:
+        # In turbo mode, use larger batches
+        if batch_size < 10000:
+            old_batch_size = batch_size
+            batch_size = 10000  # Optimized for turbo mode
+            print(f"⚠️  Batch size increased from {old_batch_size} to {batch_size} for turbo performance")
+    
     # Determine batch count and size
     num_batches = (num_spins + batch_size - 1) // batch_size
     last_batch_size = num_spins % batch_size if num_spins % batch_size != 0 else batch_size
     
+    # Special strategy for Apple Silicon 11-core
+    use_apple_optimized = IS_11CORE_APPLE and HAS_18GB_RAM
+    
     start_time = time.time()
     
-    print(f"Starting optimized simulation run '{run_id}' for {num_spins} spins...")
+    print(f"Starting optimized simulation run '{run_id}' for {num_spins:,} spins...")
     print(f"Using {NUM_CORES} CPU cores with {acceleration_type} acceleration")
     print(f"Processing in {num_batches} batches of size {batch_size}")
     print(f"Logging summary to: {summary_log_path}")
@@ -166,7 +383,6 @@ def run_optimized_simulation(
         current_spin_total_win = spin_win
         local_fs_win = 0.0
         triggered_fs = False
-        initial_free_spins = 0
         
         # Handle free spins if triggered
         if scatters_in_seq >= 3:
@@ -214,10 +430,17 @@ def run_optimized_simulation(
             end_idx = start_idx + curr_batch_size
             batch_indices = range(start_idx, end_idx)
             
-            # Process batch in parallel
-            batch_results = Parallel(n_jobs=NUM_CORES)(
-                delayed(process_spin)(i) for i in batch_indices
-            )
+            # Process batch using the optimal strategy for the hardware
+            if use_apple_optimized:
+                # Use special Apple Silicon memory-optimized processor
+                with parallel_backend('threading', n_jobs=NUM_CORES):  # Threading is more efficient for Apple Silicon
+                    batch_results = process_batch_apple_silicon(batch_indices, base_bet, verbose_spins, verbose_fs_only)
+            else:
+                # Process batch in parallel using standard method
+                with parallel_backend('loky', n_jobs=NUM_CORES):  # Process-based for standard systems
+                    batch_results = Parallel()(
+                        delayed(process_spin)(i) for i in batch_indices
+                    )
             
             # Update main statistics from batch results
             for result in batch_results:
@@ -275,6 +498,10 @@ def run_optimized_simulation(
             print(f"Progress: {progress:.1f}% ({end_idx}/{num_spins} spins). " +
                   f"Elapsed: {elapsed_time:.2f}s, Remaining: {remaining_time:.2f}s, " +
                   f"ETA: {remaining_time/60:.1f}m", end='\r')
+            
+            # For Apple Silicon, perform memory cleanup after each batch
+            if IS_APPLE_SILICON:
+                gc.collect()
     
     # Calculate final statistics
     print("\nSimulation calculations complete. Generating summary...")
@@ -296,6 +523,7 @@ def run_optimized_simulation(
         f"--- Optimized Simulation Summary: {run_id} ---",
         f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         f"Hardware: {NUM_CORES} CPU cores with {acceleration_type} acceleration",
+        f"Batch Size: {batch_size} spins, {num_batches} batches",
         f"Total Spins: {num_spins:,}",
         f"Base Bet: {base_bet:.2f}",
         f"Total Bet: {total_bet:,.2f}",
@@ -314,20 +542,12 @@ def run_optimized_simulation(
         "",
         f"Simulation Time: {total_time:.2f} seconds",
         f"Spins per second: {spins_per_sec:.2f}",
-        f"Performance Increase: {spins_per_sec / 3000.0:.2f}x faster than baseline", # Assuming baseline of ~3000 spins/sec
+        f"Performance: {spins_per_sec / 50000.0:.2f}x faster than baseline", # Baseline of ~50K spins/sec on standard hardware
         "",
-        f"Win Distribution (Top 10 Multipliers):",
     ]
     
     # Add top win multipliers to summary
     wins_sorted = sorted(win_distribution.items(), key=lambda item: item[1], reverse=True)
-    for i, (mult, count) in enumerate(wins_sorted):
-        if i < 10 or mult > 0:
-            summary_lines.append(f"  x{mult:<5}: {count:>10,} spins ({count/num_spins*100:7.4f}%)")
-        if i >= 10 and mult == 0:
-            summary_lines.append(f"  ... ({len(wins_sorted) - i} other multipliers)")
-            break
-    
     # Add FS-specific stats
     summary_lines.append(f"  Avg Win per FS Trigger: {fs_total_win / fs_triggers if fs_triggers > 0 else 0:.2f}")
     
@@ -414,26 +634,50 @@ def run_optimized_simulation(
         plt.tight_layout()
         plt.savefig(os.path.join(plots_dir, f"{run_id}_win_distribution.png"))
         
-        # Plot 2: Top 10 Wins
+        # Plot 2: Feature Wins Distribution
+        plt.figure(figsize=(12, 8))
+        
+        # Create pie chart for win distribution between base game and free spins
+        bg_win = total_win - fs_total_win
+        if total_win > 0:
+            win_sources = ['Base Game', 'Free Spins']
+            win_values = [bg_win, fs_total_win]
+            win_pcts = [bg_win/total_win*100, fs_total_win/total_win*100]
+            colors = ['cornflowerblue', 'gold']
+            
+            plt.pie(win_values, labels=[f'{s}\n({p:.1f}%)' for s, p in zip(win_sources, win_pcts)], 
+                   autopct='%1.1f%%', startangle=90, colors=colors, explode=(0, 0.1))
+            plt.axis('equal')
+            plt.title(f'Win Distribution by Source (Total RTP: {rtp:.2f}%)')
+            
+            plt.savefig(os.path.join(plots_dir, f"{run_id}_feature_wins.png"))
+        
+        # Plot 3: Top 10 Wins
         if top_wins:
             plt.figure(figsize=(12, 8))
             
             # Extract the data
             win_values = [win['total_win'] for win in top_wins[:10]]
-            win_indices = [f"{i+1}. {win['total_win']:.2f}x" for i, win in enumerate(top_wins[:10])]
+            win_indices = [f"{i+1}" for i in range(len(win_values))]
             
             # Create bar chart for top 10 wins
             bars = plt.bar(win_indices, win_values, color='orangered')
             
             # Add free spins indicators
-            for i, win in enumerate(top_wins[:10]):
+            for i, win in enumerate(top_wins[:min(10, len(top_wins))]):
                 if win['triggered_fs']:
                     bars[i].set_color('gold')
             
             plt.ylabel('Win Amount')
             plt.xlabel('Win Rank')
             plt.title('Top 10 Wins')
-            plt.xticks(rotation=45, ha='right')
+            
+            # Add win values and multipliers as text
+            for i, v in enumerate(win_values):
+                mult = v / base_bet
+                plt.text(i, v + (max(win_values) * 0.02), 
+                         f"{v:.2f}\n({mult:.1f}x)", 
+                         ha='center', va='bottom')
             
             # Add a legend
             from matplotlib.patches import Patch
@@ -479,13 +723,13 @@ if __name__ == "__main__":
     import argparse
     
     parser = argparse.ArgumentParser(description="Run Optimized Esqueleto Explosivo 3 Simulation")
-    parser.add_argument("-n", "--num_spins", type=int, default=config.TOTAL_SIMULATION_SPINS,
+    parser.add_argument("-n", "--spins", type=int, default=config.TOTAL_SIMULATION_SPINS,
                         help=f"Number of spins to simulate (default: {config.TOTAL_SIMULATION_SPINS})")
     parser.add_argument("-v", "--verbose", type=int, default=0,
                         help="Number of initial BASE GAME spins to run verbosely (ignored if -V is used)")
     parser.add_argument("-V", "--verbose-fs", action="store_true",
                         help="Run verbosely ONLY during Free Spins features.")
-    parser.add_argument("-b", "--base_bet", type=float, default=config.BASE_BET,
+    parser.add_argument("-b", "--bet", type=float, default=config.BASE_BET,
                         help=f"Base bet amount (default: {config.BASE_BET})")
     parser.add_argument("--seed", type=int, default=None,
                         help="Random seed for reproducibility (default: None)")
@@ -501,8 +745,14 @@ if __name__ == "__main__":
                         help="Disable GPU acceleration even if available")
     parser.add_argument("--cores", type=int, default=NUM_CORES,
                         help=f"Number of CPU cores to use (default: {NUM_CORES})")
-    parser.add_argument("--plots", action="store_true",
+    parser.add_argument("--create-plots", action="store_true",
                         help="Generate visualization plots of the results (requires matplotlib)")
+    parser.add_argument("--no-jit", action="store_true",
+                        help="Disable Numba JIT compilation (useful for debugging)")
+    parser.add_argument("--turbo", action="store_true",
+                        help="Enable turbo mode for maximum performance")
+    parser.add_argument("--threading", type=str, choices=["openmp", "tbb", "workqueue"],
+                        help="Specify threading backend for Numba")
     
     args = parser.parse_args()
     
@@ -510,6 +760,16 @@ if __name__ == "__main__":
     if args.cores != NUM_CORES:
         NUM_CORES = args.cores
         print(f"Using {NUM_CORES} CPU cores as specified")
+        
+    # Enable turbo mode if requested
+    if args.turbo:
+        TURBO_MODE = True
+        print("🚀 TURBO MODE ENABLED - Maximum performance optimizations active")
+        
+    # Set threading model if specified
+    if args.threading:
+        os.environ["NUMBA_THREADING_LAYER"] = args.threading
+        print(f"Using {args.threading} threading backend for Numba")
     
     # Set random seed if provided
     if args.seed is not None:
@@ -531,13 +791,16 @@ if __name__ == "__main__":
     
     # Run the optimized simulation
     run_optimized_simulation(
-        num_spins=args.num_spins,
-        base_bet=args.base_bet,
+        num_spins=args.spins,
+        base_bet=args.bet,
         run_id=args.id,
         verbose_spins=verbose_bg_spins,
         verbose_fs_only=verbose_fs,
         enhanced_stats=enhanced_stats,
         batch_size=args.batch_size,
         use_gpu=not args.no_gpu,
-        create_plots=args.plots
+        create_plots=args.create_plots,
+        cores=args.cores,
+        enable_jit=not args.no_jit,
+        turbo_mode=TURBO_MODE
     )

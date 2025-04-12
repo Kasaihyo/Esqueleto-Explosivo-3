@@ -19,8 +19,24 @@ if ! python -c "import numba" &> /dev/null; then
     echo "Try running: pip install numba"
 fi
 
-# Run the optimized script with all arguments passed through
-python run.py "$@"
+# --- Argument Parsing ---
+SPINS_ARG=""
+OTHER_ARGS=()
+FIRST_ARG_IS_SPINS=false
+
+# Check if the first argument is a number
+if [[ "$1" =~ ^[0-9]+$ ]]; then
+    SPINS_ARG="--spins $1"
+    FIRST_ARG_IS_SPINS=true
+    shift # Remove the first argument (spins)
+fi
+
+# Collect remaining arguments
+OTHER_ARGS=("$@")
+
+# --- Run the optimized script ---
+echo "Executing: python run.py ${SPINS_ARG} ${OTHER_ARGS[@]}"
+python run.py ${SPINS_ARG} "${OTHER_ARGS[@]}"
 
 # Check exit code and report results
 EXIT_CODE=$?
