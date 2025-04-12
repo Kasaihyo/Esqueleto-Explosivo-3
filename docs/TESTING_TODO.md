@@ -88,4 +88,16 @@ This document tracks the test cases needed to ensure the simulator functions cor
 
 ### Mucho Multiplier (Free Spins - `test_freespins.py` - *[DONE]*)
 *   [✅] Test starts at FS Base Level 1x on entry.
-*   [✅] Test uses correct trail based on current FS Base Level (e.g., Base 2x -> 2, 4, 8...). 
+*   [✅] Test uses correct trail based on current FS Base Level (e.g., Base 2x -> 2, 4, 8...).
+
+### Optimized Simulator Tests (`test_optimized.py` - *TODO*)
+*   [ ] Test parallel processing produces identical results to sequential processing.
+*   [ ] Test batch processing correctly aggregates results.
+*   [ ] Test hardware detection correctly identifies Apple Silicon.
+*   [ ] Test hardware detection correctly identifies CUDA capabilities.
+*   [ ] Test JIT-compiled functions produce correct results.
+*   [ ] Test visualization functions correctly generate plots.
+*   [ ] Test memory optimization correctly adjusts parameters.
+*   [ ] Test error handling for invalid parameter combinations.
+*   [ ] Benchmark tests comparing optimized vs original implementation.
+*   [ ] Test auto-configuration produces sensible parameters for different hardware profiles.
