@@ -39,15 +39,10 @@ This list outlines the key phases and tasks required to develop the slot game ba
     *   Explosion trigger (on landing).
     *   Explosion area effect (destroying correct symbols).
 15. **Implement Scatter Logic & Free Spins Trigger:** Detect Scatter counts over a full spin sequence (incl. avalanches) to trigger FS.
-16. **Implement Free Spins Feature Logic:**
-    *   Track spin count.
-    *   Manage EW Collection Counter (increment on EW removal).
-    *   Implement Upgrade Check (at end of spin).
-    *   Implement Upgrade Application (Base Multiplier + Spin at start of *next* spin).
-    *   Handle Scatter Retriggers.
-17. **Implement Bet+ Option Logic:** Simulate modifications (P(S) increase for Bonus Boosts, guaranteed EW for Enrico Show).
-18. **Implement Feature Buy Logic:** Simulate direct entry into FS (10 spins).
-19. **Implement Statistics Tracking:** Code to record RTP, hit freq, FS freq, volatility metrics (stdev), win distribution, max win observed, average spins/multipliers/EW collections, etc.
+16. **Implement Free Spins Feature Logic:** ✅ Done (Spin count, EW collection, Upgrades, Retriggers handled in `run_free_spins_feature`).
+17. **Implement Bet+ Option Logic:** ⏳ **POSTPONED.** Simulate modifications (P(S) increase for Bonus Boosts, guaranteed EW for Enrico Show).
+18. **Implement Feature Buy Logic:** ⏳ **POSTPONED.** Simulate direct entry into FS (10 spins).
+19. **Implement Statistics Tracking:** ✅ Done (RTP, hit freq, FS freq, avg FS win, win distribution, etc., are tracked and logged in `run_simulation`).
 20. **Initial Parameterization:** Input starting paytable values, estimated BG/FS probabilities, and Wild Spawn probabilities from the spec.
 21. **Run & Analyze Initial Simulations:** Execute millions/billions of spins for BG, FS (from trigger), and Feature Buy scenarios.
 22. **Tune Parameters & Iterate:**

@@ -1,0 +1,4 @@
+# Python dependencies for the simulator
+
+# numpy  # Example: For numerical operations, if needed
+# pandas # Example: For data analysis, if needed
