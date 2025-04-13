@@ -4,15 +4,21 @@
 import time
 import random
 from collections import defaultdict
-from typing import Tuple
+from typing import Tuple, Dict, Any, Optional
 import argparse # For command-line arguments
 import csv # For logging spin results
 import os
 from datetime import datetime
+import statistics # Added for ROE
+import math # Added for ROE infinity
+import copy # Added for ROE state copying
+from joblib import Parallel, delayed, parallel_backend # Added for ROE parallelization
+import multiprocessing # Added for ROE parallelization
 
 # Change relative imports to absolute
 from simulator.core.grid import Grid
 from simulator.core.symbol import SymbolType
+from simulator.core.state import GameState # Added GameState import
 from simulator import config
 
 LOG_DIR = "simulation_results"
@@ -252,6 +258,104 @@ def run_free_spins_feature(grid: Grid, base_bet: float, initial_spins: int, trig
 
     return total_fs_win
 
+def calculate_roe(rtp: float, base_bet_for_sim: float, roe_bet: float = 1.0, num_roe_sims: int = 1000, max_roe_spins: int = 1_000_000) -> Tuple[str, str]:
+    """
+    Calculates Median and Average Rate of Exhaustion (ROE) in parallel.
+
+    Runs multiple simulations starting with a balance of 100x roe_bet,
+    counting spins (N) until the balance drops below roe_bet.
+
+    Args:
+        rtp: The overall Return to Player (%) calculated from the main simulation.
+        base_bet_for_sim: The base bet used in the main simulation (needed for context, though ROE uses roe_bet).
+        roe_bet: The bet amount used for ROE simulations (default 1.0).
+        num_roe_sims: The number of ROE simulations to run (default 1000).
+        max_roe_spins: The maximum number of spins per ROE simulation before considering it infinite (default 1,000,000).
+
+    Returns:
+        A tuple containing (Median ROE, Average ROE) as strings (can be "Infinite").
+    """
+    if rtp >= 100.0:
+        print("\nCalculating ROE... RTP >= 100%, ROE is Infinite.")
+        return "Infinite", "Infinite"
+
+    print(f"\nCalculating ROE ({num_roe_sims:,} simulations, max {max_roe_spins:,} spins each, bet={roe_bet:.2f})...", end='')
+    start_balance = roe_bet * 100
+    spins_to_exhaustion = []
+    infinite_roe_found = False
+    roe_start_time = time.time()
+
+    # --- Helper function for a single ROE simulation --- 
+    def _run_single_roe_sim(sim_index: int) -> float:
+        # Ensure each parallel process has its own random seed if desired for more independent runs,
+        # although joblib usually handles this reasonably well.
+        # random.seed(os.urandom(16) + str(sim_index).encode())
+        
+        # Create a fresh game state and grid for each ROE simulation run
+        roe_game_state = GameState()
+        roe_grid = Grid(roe_game_state)
+        balance = start_balance
+        n_spins = 0
+        
+        while balance >= roe_bet:
+            if n_spins >= max_roe_spins:
+                return float('inf') # Signal infinite run
+                
+            balance -= roe_bet
+            n_spins += 1
+            
+            spin_win, scatters_in_seq = run_base_game_spin(roe_grid, roe_bet, spin_index=n_spins-1, verbose=False)
+            current_spin_total_win = spin_win
+            
+            if scatters_in_seq >= 3:
+                initial_free_spins = config.FS_TRIGGER_SCATTERS.get(scatters_in_seq)
+                if initial_free_spins is None:
+                    initial_free_spins = config.FS_TRIGGER_SCATTERS[4] + (scatters_in_seq - 4) * config.FS_TRIGGER_SCATTERS_EXTRA
+                win_from_fs = run_free_spins_feature(roe_grid, roe_bet, initial_free_spins, trigger_spin_index=n_spins-1, verbose=False)
+                current_spin_total_win += win_from_fs
+                
+            balance += current_spin_total_win
+            
+        return float(n_spins)
+    # --- End of helper function ---
+    
+    # Determine number of cores to use
+    num_cores_to_use = multiprocessing.cpu_count()
+    print(f" (using {num_cores_to_use} cores)...", end='', flush=True)
+
+    # Run simulations in parallel
+    # Use threading backend for potentially lower overhead if GIL is released often, 
+    # but 'loky' is generally safer for complex tasks.
+    with parallel_backend('loky', n_jobs=num_cores_to_use):
+        results = Parallel(verbose=0)( # verbose=0 suppresses joblib progress messages
+            delayed(_run_single_roe_sim)(i) for i in range(num_roe_sims)
+        )
+
+    # Process results
+    spins_to_exhaustion = []
+    for n_spins_result in results:
+        if n_spins_result == float('inf'):
+            infinite_roe_found = True
+            break # One infinite run makes the whole ROE infinite
+        else:
+            spins_to_exhaustion.append(n_spins_result)
+
+    roe_end_time = time.time()
+    roe_time = roe_end_time - roe_start_time
+
+    if infinite_roe_found:
+        print(f" Infinite ROE detected (a simulation reached {max_roe_spins:,} spins). Calculation took {roe_time:.2f}s.")
+        return "Infinite", "Infinite"
+    elif not spins_to_exhaustion: # Should not happen if num_roe_sims > 0 and not infinite
+         print(f" No ROE simulations completed successfully. Calculation took {roe_time:.2f}s.")
+         return "Error", "Error"
+    else:
+        median_roe = statistics.median(spins_to_exhaustion)
+        average_roe = statistics.mean(spins_to_exhaustion)
+        print(f" Calculation complete. Median={median_roe:.0f}, Average={average_roe:.0f}. Time: {roe_time:.2f}s.")
+        # Return as formatted strings without decimals
+        return f"{median_roe:.0f}", f"{average_roe:.0f}"
+
 def run_simulation(num_spins: int, base_bet: float, run_id: str, verbose_spins: int = 0, 
                   verbose_fs_only: bool = False, return_stats: bool = False, enhanced_stats: bool = False):
     """
@@ -275,7 +379,6 @@ def run_simulation(num_spins: int, base_bet: float, run_id: str, verbose_spins: 
     spins_log_path = os.path.join(LOG_DIR, f"spins_{run_id}.csv")
 
     # Create a GameState object for the Grid
-    from simulator.core.state import GameState
     game_state = GameState()
     grid = Grid(game_state)
     total_win = 0.0
@@ -394,7 +497,12 @@ def run_simulation(num_spins: int, base_bet: float, run_id: str, verbose_spins: 
     fs_trigger_freq_spins = num_spins / fs_triggers if fs_triggers > 0 else float('inf')
     spins_per_sec = num_spins / total_time if total_time > 0 else 0
 
-    # --- Prepare Summary Output --- (Add FS Win Info)
+    # --- Calculate ROE ---
+    # Run after main simulation stats (like RTP) are computed
+    # Pass the calculated RTP and the main simulation's base_bet
+    median_roe, average_roe = calculate_roe(rtp, base_bet)
+
+    # --- Prepare Summary Output --- (Add FS Win Info & ROE)
     summary_lines = [
         f"--- Simulation Summary: {run_id} ---",
         f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
@@ -405,6 +513,8 @@ def run_simulation(num_spins: int, base_bet: float, run_id: str, verbose_spins: 
         f"  Base Game Win: {(total_win - fs_total_win):,.2f}",
         f"  Free Spins Win: {fs_total_win:,.2f}",
         f"Return to Player (RTP): {rtp:.4f}%",
+        f"Median ROE: {median_roe}", # Added ROE
+        f"Average ROE: {average_roe}", # Added ROE
         "",
         f"Hit Count: {hit_count:,}",
         f"Hit Frequency: {hit_frequency:.2f}%",
@@ -497,7 +607,9 @@ def run_simulation(num_spins: int, base_bet: float, run_id: str, verbose_spins: 
             'win_ranges': win_ranges,
             'win_range_labels': win_range_labels,
             'max_win': top_wins[0]['total_win'] if top_wins else 0,
-            'max_win_multiplier': top_wins[0]['total_win']/base_bet if top_wins else 0
+            'max_win_multiplier': top_wins[0]['total_win']/base_bet if top_wins and base_bet > 0 else 0, # Added check for base_bet > 0
+            'median_roe': median_roe, # Added ROE
+            'average_roe': average_roe # Added ROE
         }
 
 if __name__ == "__main__":

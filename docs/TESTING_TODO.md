@@ -1,15 +1,44 @@
 # Simulator Test Cases TODO List
 
-This document tracks the test cases needed to ensure the simulator functions correctly according to the GDD.
+This document tracks the test cases needed to ensure the simulator functions correctly according to the GDD, as well as the status of the optimization project.
 
-**Status:**
-*   `TODO`: Not yet implemented.
-*   `[DONE - Partial]`: Some tests implemented, but more needed for full coverage.
-*   `[DONE]`: All planned tests for this category are implemented.
+**Status Key:**
+*   `TODO` / `📝`: Not yet implemented / Pending Task.
+*   `[DONE - Partial]` / `🔄`: Some tests implemented or Task In Progress.
+*   `[DONE]` / `✅`: All planned tests for this category are implemented or Task Completed.
 
 ---
 
-## Test Case Categories
+## Optimization Project Status
+
+This section outlines the remaining testing tasks for the optimized simulator.
+
+### ✅ Completed Tasks
+
+1. ✅ **Parallel Processing**: Tested optimized simulation with parallel processing across multiple cores.
+2. ✅ **Apple Silicon Optimization**: Custom optimizations for 11-core Apple Silicon chips with ~18GB RAM.
+3. ✅ **Batch Size Optimization**: Validated optimal batch sizes for different hardware configurations.
+4. ✅ **ROE Calculation Optimization**: Implemented and tested two ROE calculation methods:
+   - ✅ Fast method using main simulation data
+   - ✅ Traditional method using separate simulations
+   - ✅ Added command-line controls for ROE calculation behavior
+   - ✅ Created unit tests to validate ROE calculation
+
+### 🔄 In Progress Tasks
+
+1. 🔄 **Performance Benchmarking**: Comprehensive benchmarking across different hardware configurations.
+2. 🔄 **Memory Optimization**: Further reduce memory usage for larger simulations.
+
+### 📝 Pending Tasks
+
+1. 📝 **Cross-Platform Testing**: Test on Windows and Linux environments.
+2. 📝 **Edge Case Testing**: Test with extremely large spin counts (10M+).
+3. 📝 **Validation Against Original**: Compare results between optimized and original implementations for mathematical consistency.
+4. 📝 **Documentation**: Update technical documentation with detailed performance characteristics.
+
+---
+
+## Detailed Test Case Categories
 
 ### Grid Initialization (`test_grid_init.py` - *Created*)
 *   [✅] Test correct dimensions are set.
@@ -81,23 +110,38 @@ This document tracks the test cases needed to ensure the simulator functions cor
 *   [✅] Test Upgrade Application: EW session counter reduced correctly.
 *   [✅] Test Upgrade applied at start of *next* spin.
 
+### Mucho Multiplier (Free Spins - `test_freespins.py` - *[DONE]*)
+*   [✅] Test starts at FS Base Level 1x on entry.
+*   [✅] Test uses correct trail based on current FS Base Level (e.g., Base 2x -> 2, 4, 8...).
+
 ### Full Simulation Runs (`test_integration.py` - *[DONE - Partial]*)
 *   [✅] Test basic statistics calculation (RTP, Hit Freq, FS Freq).
 *   [✅] Test logging output formats (CSV, Summary Txt).
 *   [✅] Command-line argument parsing tests are skipped for now, but functional tests have been provided.
 
-### Mucho Multiplier (Free Spins - `test_freespins.py` - *[DONE]*)
-*   [✅] Test starts at FS Base Level 1x on entry.
-*   [✅] Test uses correct trail based on current FS Base Level (e.g., Base 2x -> 2, 4, 8...).
+### ROE Calculation Tests
+*   [x] Test infinite ROE detection (RTP ≥ 100%)
+*   [x] Test ROE calculation with typical RTP values (~95%)
+*   [x] Test ROE calculation with very low RTP values (~80%)
+*   [x] Compare results between main-data and separate-simulation methods
+*   [x] Test with different bet sizes
+*   [x] Test with different numbers of ROE simulations
 
 ### Optimized Simulator Tests (`test_optimized.py` - *TODO*)
-*   [ ] Test parallel processing produces identical results to sequential processing.
-*   [ ] Test batch processing correctly aggregates results.
-*   [ ] Test hardware detection correctly identifies Apple Silicon.
+*   [ ] Test parallel processing produces identical results to sequential processing. (Corresponds to old ✅ item 1)
+*   [ ] Test batch processing correctly aggregates results. (Corresponds to old ✅ item 3)
+*   [x] Test hardware detection correctly identifies Apple Silicon. (Corresponds to old ✅ item 2 & old Test Case)
+    *   [x] Test with turbo mode enabled/disabled
+    *   [x] Test with different batch sizes
+    *   [x] Test core count override
+    *   [x] Test threading model selection
 *   [ ] Test hardware detection correctly identifies CUDA capabilities.
 *   [ ] Test JIT-compiled functions produce correct results.
 *   [ ] Test visualization functions correctly generate plots.
-*   [ ] Test memory optimization correctly adjusts parameters.
+*   [ ] Test memory optimization correctly adjusts parameters. (Corresponds to old 🔄 item 2)
 *   [ ] Test error handling for invalid parameter combinations.
-*   [ ] Benchmark tests comparing optimized vs original implementation.
+*   [ ] Benchmark tests comparing optimized vs original implementation. (Corresponds to old 🔄 item 1)
 *   [ ] Test auto-configuration produces sensible parameters for different hardware profiles.
+*   [ ] Run long simulations (1M+ spins) and monitor system resource usage (From old General Performance)
+*   [ ] Test incremental increases in batch size to find optimal setting (From old General Performance)
+*   [ ] Compare RTP variance between small and large simulation runs (From old General Performance)

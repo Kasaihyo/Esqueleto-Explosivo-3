@@ -12,6 +12,7 @@ import gc
 import numpy as np
 import multiprocessing
 import platform
+import statistics
 from datetime import datetime
 from typing import List, Tuple, Dict, Set, Optional, Any
 from collections import defaultdict, deque
@@ -240,6 +241,189 @@ def process_batch_apple_silicon(batch_indices, base_bet, verbose_spins, verbose_
     
     return batch_results
 
+def calculate_roe_optimized(
+    main_simulation_data: List[Dict],
+    rtp: float, 
+    base_bet_for_sim: float, 
+    roe_bet: float = 1.0, 
+    num_roe_sims: int = 1000, 
+    max_roe_spins: int = 1_000_000,
+    roe_cores: int = None,
+    use_main_data: bool = True
+) -> Tuple[str, str]:
+    """
+    Optimized ROE calculation that can reuse main simulation data.
+    
+    Args:
+        main_simulation_data: Data from the main simulation run (used when use_main_data=True)
+        rtp: The overall Return to Player (%) calculated from the main simulation
+        base_bet_for_sim: The base bet used in the main simulation
+        roe_bet: The bet amount used for ROE simulations (default 1.0)
+        num_roe_sims: The number of ROE simulations to run when not using main data
+        max_roe_spins: Maximum spins per ROE simulation before considering it infinite
+        roe_cores: Number of cores to use for ROE calculation (default: use NUM_CORES)
+        use_main_data: Whether to use the main simulation data for ROE calculation
+        
+    Returns:
+        A tuple containing (Median ROE, Average ROE) as strings (can be "Infinite")
+    """
+    global NUM_CORES
+    
+    if roe_cores is None:
+        roe_cores = NUM_CORES
+        
+    # If RTP >= 100%, ROE is automatically "Infinite"
+    if rtp >= 100.0:
+        print("\nCalculating ROE... RTP >= 100%, ROE is Infinite.")
+        return "Infinite", "Infinite"
+    
+    if use_main_data and main_simulation_data:
+        # Use the main simulation data for ROE calculation (fast)
+        print(f"\nCalculating ROE using main simulation data ({len(main_simulation_data):,} spins)...", end='')
+        roe_start_time = time.time()
+        
+        # We'll run multiple simulations reusing the main simulation data with different random starting points
+        def run_roe_sim_from_main_data(sim_index: int) -> float:
+            # Create a random starting point in the data
+            data_length = len(main_simulation_data)
+            if data_length < 100:
+                # Not enough data to calculate meaningful ROE
+                return float('nan')
+                
+            # Start with balance of 100x bet
+            start_balance = roe_bet * 100
+            balance = start_balance
+            n_spins = 0
+            
+            # Generate a random starting index
+            random_start = random.randint(0, data_length - 1)
+            
+            # Loop through the data, wrapping around if needed
+            while balance >= roe_bet and n_spins < max_roe_spins:
+                index = (random_start + n_spins) % data_length
+                spin_data = main_simulation_data[index]
+                
+                # Apply the win data from the main simulation
+                balance -= roe_bet
+                n_spins += 1
+                
+                # Scale the win based on the bet ratio
+                win_ratio = roe_bet / base_bet_for_sim
+                current_win = spin_data['total_win'] * win_ratio
+                balance += current_win
+            
+            # Return infinity if we reached max spins, otherwise return the actual spins
+            return float('inf') if n_spins >= max_roe_spins else float(n_spins)
+            
+        # We can run many ROE simulations in parallel using the main data
+        num_roe_sims = min(5000, max(num_roe_sims, 1000))  # Use more samples since it's very fast
+        
+        # Determine the optimal backend for the current hardware
+        backend = 'threading' if IS_APPLE_SILICON else 'loky'
+        
+        with parallel_backend(backend, n_jobs=roe_cores):
+            results = Parallel(verbose=0)(
+                delayed(run_roe_sim_from_main_data)(i) for i in range(num_roe_sims)
+            )
+            
+        # Process results
+        spins_to_exhaustion = []
+        infinite_roe_found = False
+        
+        for n_spins_result in results:
+            if n_spins_result == float('inf'):
+                infinite_roe_found = True
+                break  # One infinite run makes the whole ROE infinite
+            elif not np.isnan(n_spins_result):
+                spins_to_exhaustion.append(n_spins_result)
+                
+        roe_end_time = time.time()
+        roe_time = roe_end_time - roe_start_time
+        
+        if infinite_roe_found:
+            print(f" Infinite ROE detected. Calculation took {roe_time:.2f}s.")
+            return "Infinite", "Infinite"
+        elif not spins_to_exhaustion:  # Should not happen if num_roe_sims > 0 and not infinite
+            print(f" No ROE simulations completed successfully. Calculation took {roe_time:.2f}s.")
+            return "Error", "Error"
+        else:
+            median_roe = statistics.median(spins_to_exhaustion)
+            average_roe = statistics.mean(spins_to_exhaustion)
+            print(f" Calculation complete. Median={median_roe:.0f}, Average={average_roe:.0f}. Time: {roe_time:.2f}s.")
+            # Return as formatted strings without decimals
+            return f"{median_roe:.0f}", f"{average_roe:.0f}"
+    else:
+        # Running separate ROE simulations (slower)
+        print(f"\nCalculating ROE with {num_roe_sims:,} separate simulations (max {max_roe_spins:,} spins each, bet={roe_bet:.2f})...", end='')
+        roe_start_time = time.time()
+        
+        start_balance = roe_bet * 100
+        infinite_roe_found = False
+        
+        # Helper function for a single ROE simulation
+        def _run_single_roe_sim(sim_index: int) -> float:
+            # Create a fresh game state and grid for each ROE simulation run
+            roe_game_state = GameState()
+            roe_grid = Grid(roe_game_state)
+            balance = start_balance
+            n_spins = 0
+            
+            while balance >= roe_bet:
+                if n_spins >= max_roe_spins:
+                    return float('inf')  # Signal infinite run
+                    
+                balance -= roe_bet
+                n_spins += 1
+                
+                spin_win, scatters_in_seq = run_base_game_spin(roe_grid, roe_bet, spin_index=n_spins-1, verbose=False)
+                current_spin_total_win = spin_win
+                
+                if scatters_in_seq >= 3:
+                    initial_free_spins = config.FS_TRIGGER_SCATTERS.get(scatters_in_seq)
+                    if initial_free_spins is None:
+                        initial_free_spins = config.FS_TRIGGER_SCATTERS[4] + (scatters_in_seq - 4) * config.FS_TRIGGER_SCATTERS_EXTRA
+                    win_from_fs = run_free_spins_feature(roe_grid, roe_bet, initial_free_spins, trigger_spin_index=n_spins-1, verbose=False)
+                    current_spin_total_win += win_from_fs
+                    
+                balance += current_spin_total_win
+                
+            return float(n_spins)
+            
+        # Determine the optimal backend for the current hardware
+        backend = 'threading' if IS_APPLE_SILICON else 'loky'
+        print(f" (using {roe_cores} cores with {backend})...", end='', flush=True)
+        
+        # Run simulations in parallel
+        with parallel_backend(backend, n_jobs=roe_cores):
+            results = Parallel(verbose=0)(
+                delayed(_run_single_roe_sim)(i) for i in range(num_roe_sims)
+            )
+            
+        # Process results
+        spins_to_exhaustion = []
+        for n_spins_result in results:
+            if n_spins_result == float('inf'):
+                infinite_roe_found = True
+                break  # One infinite run makes the whole ROE infinite
+            else:
+                spins_to_exhaustion.append(n_spins_result)
+                
+        roe_end_time = time.time()
+        roe_time = roe_end_time - roe_start_time
+        
+        if infinite_roe_found:
+            print(f" Infinite ROE detected. Calculation took {roe_time:.2f}s.")
+            return "Infinite", "Infinite"
+        elif not spins_to_exhaustion:  # Should not happen if num_roe_sims > 0 and not infinite
+            print(f" No ROE simulations completed successfully. Calculation took {roe_time:.2f}s.")
+            return "Error", "Error"
+        else:
+            median_roe = statistics.median(spins_to_exhaustion)
+            average_roe = statistics.mean(spins_to_exhaustion)
+            print(f" Calculation complete. Median={median_roe:.0f}, Average={average_roe:.0f}. Time: {roe_time:.2f}s.")
+            # Return as formatted strings without decimals
+            return f"{median_roe:.0f}", f"{average_roe:.0f}"
+
 def run_optimized_simulation(
     num_spins: int, 
     base_bet: float, 
@@ -253,7 +437,10 @@ def run_optimized_simulation(
     create_plots: bool = False,
     cores: int = None,
     enable_jit: bool = True,
-    turbo_mode: bool = None
+    turbo_mode: bool = None,
+    calculate_roe: bool = True,
+    roe_use_main_data: bool = True,
+    roe_num_sims: int = 1000
 ) -> Optional[Dict[str, Any]]:
     """
     Runs an optimized version of the simulation leveraging parallel processing,
@@ -273,6 +460,9 @@ def run_optimized_simulation(
         cores: Number of CPU cores to use (overrides auto-detection)
         enable_jit: Whether to enable Numba JIT compilation
         turbo_mode: Whether to enable turbo mode for maximum performance
+        calculate_roe: Whether to calculate ROE statistics
+        roe_use_main_data: Whether to use the main simulation data for ROE calculation
+        roe_num_sims: Number of ROE simulations to run if not using main data
         
     Returns:
         Dict of statistics if return_stats is True, otherwise None
@@ -341,13 +531,16 @@ def run_optimized_simulation(
     win_ranges = [0, 0, 0, 0, 0, 0, 0]  # 0-1x, 1-5x, 5-10x, 10-50x, 50-100x, 100-500x, 500x+
     win_range_labels = ["0-1x", "1-5x", "5-10x", "10-50x", "50-100x", "100-500x", "500x+"]
     
+    # Store all spin data if we need it for ROE calculation
+    all_spin_data = [] if calculate_roe and roe_use_main_data else None
+    
     # Optimize batch size for Apple Silicon if needed
     if IS_11CORE_APPLE and HAS_18GB_RAM and TURBO_MODE:
         # In turbo mode, use larger batches
-        if batch_size < 10000:
+        if batch_size < 10000 and num_spins >= 10000:
             old_batch_size = batch_size
-            batch_size = 10000  # Optimized for turbo mode
-            print(f"⚠️  Batch size increased from {old_batch_size} to {batch_size} for turbo performance")
+            batch_size = min(10000, num_spins)  # Optimized for turbo mode, but don't exceed num_spins
+            print(f"⚠️  Batch size adjusted from {old_batch_size} to {batch_size} for turbo performance")
     
     # Determine batch count and size
     num_batches = (num_spins + batch_size - 1) // batch_size
@@ -452,6 +645,10 @@ def run_optimized_simulation(
                     result['hit']
                 ])
                 
+                # Store data for ROE calculation if needed
+                if all_spin_data is not None:
+                    all_spin_data.append(result)
+                
                 # Update statistics
                 spin_wins.append(result['total_win'])
                 total_scatters_seen += result['scatters']
@@ -518,6 +715,22 @@ def run_optimized_simulation(
     fs_trigger_freq_spins = num_spins / fs_triggers if fs_triggers > 0 else float('inf')
     spins_per_sec = num_spins / total_time if total_time > 0 else 0
     
+    # Calculate ROE if requested
+    median_roe = "N/A"
+    average_roe = "N/A"
+    
+    if calculate_roe:
+        median_roe, average_roe = calculate_roe_optimized(
+            all_spin_data,
+            rtp=rtp,
+            base_bet_for_sim=base_bet,
+            roe_bet=1.0,
+            num_roe_sims=roe_num_sims,
+            max_roe_spins=1_000_000,
+            roe_cores=NUM_CORES,
+            use_main_data=roe_use_main_data
+        )
+    
     # Prepare summary output
     summary_lines = [
         f"--- Optimized Simulation Summary: {run_id} ---",
@@ -531,6 +744,16 @@ def run_optimized_simulation(
         f"  Base Game Win: {(total_win - fs_total_win):,.2f}",
         f"  Free Spins Win: {fs_total_win:,.2f}",
         f"Return to Player (RTP): {rtp:.4f}%",
+    ]
+    
+    # Add ROE information if available
+    if calculate_roe:
+        summary_lines.extend([
+            f"Median ROE: {median_roe}",
+            f"Average ROE: {average_roe}"
+        ])
+    
+    summary_lines.extend([
         "",
         f"Hit Count: {hit_count:,}",
         f"Hit Frequency: {hit_frequency:.2f}%",
@@ -544,7 +767,7 @@ def run_optimized_simulation(
         f"Spins per second: {spins_per_sec:.2f}",
         f"Performance: {spins_per_sec / 50000.0:.2f}x faster than baseline", # Baseline of ~50K spins/sec on standard hardware
         "",
-    ]
+    ])
     
     # Add top win multipliers to summary
     wins_sorted = sorted(win_distribution.items(), key=lambda item: item[1], reverse=True)
@@ -715,7 +938,9 @@ def run_optimized_simulation(
             'simulation_time': total_time,
             'spins_per_second': spins_per_sec,
             'acceleration_type': acceleration_type,
-            'plots_created': create_plots and MATPLOTLIB_AVAILABLE
+            'plots_created': create_plots and MATPLOTLIB_AVAILABLE,
+            'median_roe': median_roe,
+            'average_roe': average_roe
         }
 
 # Allow direct execution via python -m simulator.optimized
@@ -753,6 +978,16 @@ if __name__ == "__main__":
                         help="Enable turbo mode for maximum performance")
     parser.add_argument("--threading", type=str, choices=["openmp", "tbb", "workqueue"],
                         help="Specify threading backend for Numba")
+    parser.add_argument("--roe", action="store_true", dest="calculate_roe", default=True,
+                        help="Calculate ROE statistics (default: enabled)")
+    parser.add_argument("--no-roe", action="store_false", dest="calculate_roe",
+                        help="Disable ROE calculation")
+    parser.add_argument("--roe-use-main-data", action="store_true", default=True,
+                        help="Use main simulation data for ROE calculation (faster, default: enabled)")
+    parser.add_argument("--roe-separate-sims", action="store_false", dest="roe_use_main_data",
+                        help="Run separate simulations for ROE calculation (slower)")
+    parser.add_argument("--roe-num-sims", type=int, default=1000,
+                        help="Number of ROE simulations to run if not using main data (default: 1000)")
     
     args = parser.parse_args()
     
@@ -802,5 +1037,8 @@ if __name__ == "__main__":
         create_plots=args.create_plots,
         cores=args.cores,
         enable_jit=not args.no_jit,
-        turbo_mode=TURBO_MODE
+        turbo_mode=TURBO_MODE,
+        calculate_roe=args.calculate_roe,
+        roe_use_main_data=args.roe_use_main_data,
+        roe_num_sims=args.roe_num_sims
     )

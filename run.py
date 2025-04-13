@@ -177,6 +177,16 @@ def main():
                         help="Run with enhanced debugging output")
     parser.add_argument("--bet", type=float, default=1.0,
                         help="Base bet amount (default: 1.0)")
+    parser.add_argument("--roe", action="store_true", dest="calculate_roe", default=True,
+                        help="Calculate ROE statistics (default: enabled)")
+    parser.add_argument("--no-roe", action="store_false", dest="calculate_roe",
+                        help="Disable ROE calculation")
+    parser.add_argument("--roe-use-main-data", action="store_true", default=True,
+                        help="Use main simulation data for ROE calculation (faster)")
+    parser.add_argument("--roe-separate-sims", action="store_false", dest="roe_use_main_data",
+                        help="Run separate simulations for ROE calculation (slower)")
+    parser.add_argument("--roe-num-sims", type=int, default=1000,
+                        help="Number of ROE simulations to run if not using main data (default: 1000)")
     args = parser.parse_args()
     
     # Get optimal settings based on hardware and profile
@@ -235,6 +245,16 @@ def main():
     if settings.get("threading_model"):
         cmd.append("--threading")
         cmd.append(settings["threading_model"])
+        
+    # Add ROE calculation flags
+    if not args.calculate_roe:
+        cmd.append("--no-roe")
+    elif not args.roe_use_main_data:
+        cmd.append("--roe-separate-sims")
+        
+    if args.roe_num_sims != 1000:
+        cmd.append("--roe-num-sims")
+        cmd.append(str(args.roe_num_sims))
     
     # Print command details
     print("\n=== Running with Optimal Settings ===")
@@ -246,6 +266,12 @@ def main():
     print(f"Visualization: {'Enabled' if args.plots else 'Disabled'}")
     print(f"Turbo Mode: {'Enabled' if settings.get('apple_silicon_turbo', False) else 'Disabled'}")
     print(f"Threading Model: {settings.get('threading_model', 'default')}")
+    
+    # Print ROE settings
+    roe_status = "Disabled" if not args.calculate_roe else "Enabled"
+    roe_method = "Using main data (fast)" if args.roe_use_main_data else f"Separate sims ({args.roe_num_sims})"
+    print(f"ROE Calculation: {roe_status} - {roe_method if args.calculate_roe else ''}")
+    
     print(f"Run ID: {run_id}")
     print("\nStarting simulation...")
     

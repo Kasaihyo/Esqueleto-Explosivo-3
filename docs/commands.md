@@ -12,9 +12,14 @@ This auto-detects your hardware (CPU, memory, GPU) and runs at maximum speed.
 
 Options:
 ```bash
-./run.sh 100000        # Run 100,000 spins
-./run.sh --plots       # Generate visual charts
-./run.sh 50000 --plots # Both options
+./run.sh 100000                # Run 100,000 spins
+./run.sh --plots               # Generate visual charts
+./run.sh 50000 --plots         # Both options
+./run.sh --profile 11core18gb  # Use optimized profile for 11-core Apple Silicon
+./run.sh --no-roe              # Disable ROE calculation
+./run.sh --roe-separate-sims   # Calculate ROE using separate simulations (more accurate but slower)
+./run.sh --roe-use-main-data   # Calculate ROE using main simulation data (faster, default)
+./run.sh --roe-num-sims 2000   # Use 2000 simulations for ROE calculation
 ```
 
 Results appear in `simulation_results/` directory.
@@ -195,6 +200,42 @@ python -m simulator.optimized -n 100000 --enhanced-stats --plots
 ```
 
 This will generate PNG files in the `simulation_results/plots/` directory.
+
+### ROE Calculation Options
+
+The ROE (Rate of Exhaustion) calculation measures how quickly a player's balance is depleted. There are two methods available:
+
+#### Using Main Simulation Data (Fast Method)
+
+This reuses the data from your main simulation to calculate ROE, which is much faster:
+
+```bash
+python -m simulator.optimized -n 100000 --roe-use-main-data
+```
+
+#### Using Separate Simulations (Traditional Method)
+
+This runs dedicated simulations for ROE calculation (more accurate but slower):
+
+```bash
+python -m simulator.optimized -n 100000 --roe-separate-sims --roe-num-sims 2000
+```
+
+#### Disabling ROE Calculation
+
+If you don't need ROE statistics, you can disable the calculation:
+
+```bash
+python -m simulator.optimized -n 100000 --no-roe
+```
+
+#### Example with All Options
+
+Run with detailed statistics and use main simulation data for faster ROE calculation:
+
+```bash
+python -m simulator.optimized -n 100000 --enhanced-stats --plots --roe-use-main-data
+```
 
 ## Running Unit Tests
 
