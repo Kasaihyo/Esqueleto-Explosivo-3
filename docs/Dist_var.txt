@@ -1,0 +1,74 @@
+001 - 1 ,2, 3
+
+    "LADY_SK": 326,
+    "PINK_SK": 330,
+    "GREEN_SK": 332,
+    "BLUE_SK": 334,
+    "ORANGE_SK": 336,
+    "CYAN_SK": 339,
+    "WILD": 45,
+    "E_WILD": 45,
+    "SCATTER": 20,
+
+Return to Player (RTP): 133.5428%
+Median ROE: Infinite
+Average ROE: Infinite
+Hit Frequency: 33.84%
+FS Trigger Rate: ~1 in 75.4 spins
+Avg Win per FS Trigger: 73.66
+Max Win: 1,492.30 (1492.30x)
+
+004  - 
+
+Current Rotation: 180°
+Intensity: 10
+
+    "LADY_SK": 310,
+    "PINK_SK": 319,
+    "GREEN_SK": 329,
+    "BLUE_SK": 338,
+    "ORANGE_SK": 347,
+    "CYAN_SK": 357,
+    "WILD": 45,
+    "E_WILD": 45,
+    "SCATTER": 20,
+
+Return to Player (RTP): 120.6909%
+Median ROE: Infinite
+Average ROE: Infinite
+Hit Frequency: 33.76%
+FS Trigger Rate: ~1 in 76.3 spins
+Max Win: 1,078.50 (1078.50x)
+
+005  - 
+
+Current Rotation:  60°
+Intensity: 10
+
+    "LADY_SK": 322,
+    "PINK_SK": 327,
+    "GREEN_SK": 331,
+    "BLUE_SK": 336,
+    "ORANGE_SK": 340,
+    "CYAN_SK": 344,
+    "WILD": 45,
+    "E_WILD": 45,
+    "SCATTER": 20,
+
+Return to Player (RTP): 121.1950%
+Median ROE: Infinite
+Average ROE: Infinite
+Hit Frequency: 33.98%
+FS Trigger Rate: ~1 in 79.1 spins
+Max Win: 1,385.00 (1385.00x)
+
+
+
+010
+
+    "LADY_SK": 306,
+    "PINK_SK": 317,
+    "GREEN_SK": 328,
+    "BLUE_SK": 339,
+    "ORANGE_SK": 350,
+    "CYAN_SK": 360,

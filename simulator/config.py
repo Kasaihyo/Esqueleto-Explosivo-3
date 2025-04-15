@@ -47,28 +47,66 @@ for symbol_pays in PAYTABLE.values():
 # Placeholder values - Requires tuning based on simulation target RTP.
 # Separate distributions needed for BG and FS (GDD 4.4)
 SYMBOL_GENERATION_WEIGHTS_BG = {
-    "LADY_SK": 100,
-    "PINK_SK": 250,
-    "GREEN_SK": 250,
-    "BLUE_SK": 300,
-    "ORANGE_SK": 356,
-    "CYAN_SK": 400,
-    "WILD": 32,
-    "E_WILD": 32,
-    "SCATTER": 15, 
+    "LADY_SK": 333,
+    "PINK_SK": 333,
+    "GREEN_SK": 333,
+    "BLUE_SK": 333,
+    "ORANGE_SK": 333,
+    "CYAN_SK": 333,
+    "WILD": 48,
+    "E_WILD": 48,
+    "SCATTER": 15,
+
+}
+SYMBOL_GENERATION_WEIGHTS_FS = {
+    "LADY_SK": 333,
+    "PINK_SK": 333,
+    "GREEN_SK": 333,
+    "BLUE_SK": 333,
+    "ORANGE_SK": 333,
+    "CYAN_SK": 333,
+    "WILD": 48,
+    "E_WILD": 48,
+    "SCATTER": 15,
 }
 
-SYMBOL_GENERATION_WEIGHTS_FS = {
-    "LADY_SK": 100,
-    "PINK_SK": 250,
-    "GREEN_SK": 250,
-    "BLUE_SK": 300,
-    "ORANGE_SK": 356,
-    "CYAN_SK": 400,
-    "WILD": 32,
-    "E_WILD": 32,
-    "SCATTER": 15, 
-}
+# SYMBOL_GENERATION_WEIGHTS_BG = {
+#     "LADY_SK": 170,
+#     "PINK_SK": 254,
+#     "GREEN_SK": 292,
+#     "BLUE_SK": 375,
+#     "ORANGE_SK": 414,
+#     "CYAN_SK": 496,
+#     "WILD": 45,
+#     "E_WILD": 45,
+#     "SCATTER": 20,
+
+# }
+# SYMBOL_GENERATION_WEIGHTS_FS = {
+#     "LADY_SK": 170,
+#     "PINK_SK": 254,
+#     "GREEN_SK": 292,
+#     "BLUE_SK": 375,
+#     "ORANGE_SK": 414,
+#     "CYAN_SK": 496,
+#     "WILD": 45,
+#     "E_WILD": 45,
+#     "SCATTER": 20,
+
+# }
+
+
+# SYMBOL_GENERATION_WEIGHTS_FS = {
+#     "LADY_SK": 90,
+#     "PINK_SK": 110,
+#     "GREEN_SK": 280,
+#     "BLUE_SK": 320,
+#     "ORANGE_SK": 560,
+#     "CYAN_SK": 640,
+#     "WILD": 30,
+#     "E_WILD": 30,
+#     "SCATTER": 15,
+# }
 
 # --- Wild Spawning Probabilities ---
 # GDD 4.7 - P(SpawnW) + P(SpawnEW) = 1
