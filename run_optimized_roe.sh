@@ -1,5 +1,11 @@
 #!/bin/bash
-# Specialized script for ROE calculation with different methods
+# DEPRECATED: This specialized script for ROE calculation is now superseded by run.sh
+# All functionality is available through run.sh with appropriate arguments:
+#   ./run.sh --roe-use-main-data              # Use main data for ROE (fast)
+#   ./run.sh --roe-separate-sims              # Use separate sims for ROE (more accurate)
+#   ./run.sh --roe-num-sims 2000              # Set number of ROE sims
+#
+# Consider using run.sh instead of this script.
 
 # Default values
 SPINS=10000

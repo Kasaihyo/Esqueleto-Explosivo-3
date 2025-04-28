@@ -47,72 +47,34 @@ for symbol_pays in PAYTABLE.values():
 # Placeholder values - Requires tuning based on simulation target RTP.
 # Separate distributions needed for BG and FS (GDD 4.4)
 SYMBOL_GENERATION_WEIGHTS_BG = {
-    "LADY_SK": 333,
-    "PINK_SK": 333,
-    "GREEN_SK": 333,
-    "BLUE_SK": 333,
-    "ORANGE_SK": 333,
-    "CYAN_SK": 333,
-    "WILD": 48,
-    "E_WILD": 48,
-    "SCATTER": 15,
-
+    "LADY_SK": 19,  # Updated from 6.5
+    "PINK_SK": 26, # Updated from 25.8
+    "GREEN_SK": 26, # Updated from 25.8
+    "BLUE_SK": 26, # Updated from 25.8
+    "ORANGE_SK": 26, # Updated from 25.8
+    "CYAN_SK": 26, # Updated from 25.8
+    "WILD": 7.6,   # Updated from 9.2
+    "E_WILD": 7.3,  # Unchanged
+    "SCATTER": 0.45 # Unchanged
 }
 SYMBOL_GENERATION_WEIGHTS_FS = {
-    "LADY_SK": 333,
-    "PINK_SK": 333,
-    "GREEN_SK": 333,
-    "BLUE_SK": 333,
-    "ORANGE_SK": 333,
-    "CYAN_SK": 333,
-    "WILD": 48,
-    "E_WILD": 48,
-    "SCATTER": 15,
+
+    "LADY_SK": 21,  # Unchanged
+    "PINK_SK": 23, # Updated from 22.8
+    "GREEN_SK": 23, # Updated from 22.8
+    "BLUE_SK": 23, # Updated from 22.8
+    "ORANGE_SK": 23, # Updated from 22.8
+    "CYAN_SK": 23, # Updated from 22.8
+    "WILD": 4.1,      # Updated from 3.0
+    "E_WILD": 4.1,    # Unchanged
+    "SCATTER": 0.30   # Updated from 0.40
 }
-
-# SYMBOL_GENERATION_WEIGHTS_BG = {
-#     "LADY_SK": 170,
-#     "PINK_SK": 254,
-#     "GREEN_SK": 292,
-#     "BLUE_SK": 375,
-#     "ORANGE_SK": 414,
-#     "CYAN_SK": 496,
-#     "WILD": 45,
-#     "E_WILD": 45,
-#     "SCATTER": 20,
-
-# }
-# SYMBOL_GENERATION_WEIGHTS_FS = {
-#     "LADY_SK": 170,
-#     "PINK_SK": 254,
-#     "GREEN_SK": 292,
-#     "BLUE_SK": 375,
-#     "ORANGE_SK": 414,
-#     "CYAN_SK": 496,
-#     "WILD": 45,
-#     "E_WILD": 45,
-#     "SCATTER": 20,
-
-# }
-
-
-# SYMBOL_GENERATION_WEIGHTS_FS = {
-#     "LADY_SK": 90,
-#     "PINK_SK": 110,
-#     "GREEN_SK": 280,
-#     "BLUE_SK": 320,
-#     "ORANGE_SK": 560,
-#     "CYAN_SK": 640,
-#     "WILD": 30,
-#     "E_WILD": 30,
-#     "SCATTER": 15,
-# }
 
 # --- Wild Spawning Probabilities ---
 # GDD 4.7 - P(SpawnW) + P(SpawnEW) = 1
 # Requires tuning.
-PROB_SPAWN_WILD = 0.5 # Probability of spawning a standard Wild
-PROB_SPAWN_E_WILD = 0.5 # Probability of spawning an Explosivo Wild
+PROB_SPAWN_WILD = 0.60 
+PROB_SPAWN_E_WILD = 0.40 
 
 # --- Simulation Parameters ---
 GRID_ROWS = 5

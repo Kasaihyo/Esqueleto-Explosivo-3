@@ -1,16 +1,32 @@
 #!/usr/bin/env python
 """
 Auto-optimized simulator launcher for Esqueleto Explosivo 3.
+
 This script automatically detects hardware capabilities and runs the simulator
 with optimal settings, with special optimizations for Apple Silicon ARM processors.
+It provides a unified interface for all simulator features including RNG handling,
+ROE calculation, and hardware-specific optimizations.
 
 Usage:
-    python run.py [--spins SPINS] [--plots] [--profile PROFILE]
+    python run.py [options]
 
-Example:
+Basic Examples:
     python run.py                  # Run with auto-detected optimal settings
     python run.py --spins 100000   # Run 100,000 spins
-    python run.py --profile m1     # Use optimization profile for M1 chip
+    python run.py --bet 2.0        # Set bet amount to 2.0
+    python run.py --seed 12345     # Use specific random seed
+
+RNG Handling Examples:
+    python run.py --identical-sequence          # Force identical results (default)
+    python run.py --no-identical-sequence       # Allow parallel RNG (faster)
+    python run.py --no-sequential-rng           # Maximum performance RNG
+
+Hardware Profiles:
+    python run.py --profile m1                  # Optimize for M1 chip
+    python run.py --profile m1pro               # Optimize for M1 Pro chip
+    python run.py --profile 11core18gb          # Optimize for 11-core Apple Silicon
+
+For complete documentation, see docs/commands.md
 """
 
 import os
@@ -112,36 +128,43 @@ def get_optimal_settings(profile=None):
     
     # Profile-specific optimizations
     if profile:
-        if profile == "m1":
-            # M1 chip (8-core, typically 8GB/16GB memory)
-            settings["cores"] = min(7, NUM_CORES)
-            settings["batch_size"] = 3000
-            settings["enable_jit"] = True
-        elif profile == "m1pro":
-            # M1 Pro (8-10 cores, typically 16GB memory)
-            settings["cores"] = min(8, NUM_CORES)
-            settings["batch_size"] = 6000
-            settings["enable_jit"] = True
-        elif profile == "m1max":
-            # M1 Max (10 cores, typically 32GB memory)
-            settings["cores"] = min(8, NUM_CORES)
-            settings["batch_size"] = 8000
-            settings["enable_jit"] = True
-        elif profile == "m2":
-            # M2 (8 cores, typically 8GB/16GB/24GB memory)
-            settings["cores"] = min(7, NUM_CORES)
-            settings["batch_size"] = 4000
-            settings["enable_jit"] = True
-        elif profile == "m2pro":
-            # M2 Pro (10-12 cores, typically 16GB/32GB memory)
-            settings["cores"] = min(8, NUM_CORES)
-            settings["batch_size"] = 6000
-            settings["enable_jit"] = True
-        elif profile == "m3":
-            # M3 or newer
-            settings["cores"] = min(NUM_CORES - 2, NUM_CORES)
-            settings["batch_size"] = 8000
-            settings["enable_jit"] = True
+        # Predefined profiles for common hardware configurations
+        profiles = {
+            "m1": {
+                "cores": min(7, NUM_CORES),
+                "batch_size": 3000,
+                "enable_jit": True
+            },
+            "m1pro": {
+                "cores": min(8, NUM_CORES),
+                "batch_size": 6000,
+                "enable_jit": True
+            },
+            "m1max": {
+                "cores": min(8, NUM_CORES),
+                "batch_size": 8000,
+                "enable_jit": True
+            },
+            "m2": {
+                "cores": min(7, NUM_CORES),
+                "batch_size": 4000,
+                "enable_jit": True
+            },
+            "m2pro": {
+                "cores": min(8, NUM_CORES),
+                "batch_size": 6000,
+                "enable_jit": True
+            },
+            "m3": {
+                "cores": min(NUM_CORES - 2, NUM_CORES),
+                "batch_size": 8000,
+                "enable_jit": True
+            }
+        }
+        
+        if profile in profiles:
+            for key, value in profiles[profile].items():
+                settings[key] = value
         elif profile == "11core18gb":
             # Exact match for the detected hardware (11 cores, 18GB RAM)
             settings["cores"] = 10  # Use 10 cores for maximum throughput
@@ -187,6 +210,17 @@ def main():
                         help="Run separate simulations for ROE calculation (slower)")
     parser.add_argument("--roe-num-sims", type=int, default=1000,
                         help="Number of ROE simulations to run if not using main data (default: 1000)")
+    # Add RNG handling flags
+    parser.add_argument("--identical-sequence", action="store_true", default=True,
+                        help="Force identical results as non-optimized version when using same seed (default: True)")
+    parser.add_argument("--no-identical-sequence", dest="identical_sequence", action="store_false",
+                        help="Allow optimized version to use parallel RNG (faster but different results from non-optimized)")
+    parser.add_argument("--sequential-rng", action="store_true", default=True,
+                        help="Simulate sequential RNG behavior in parallel execution (default: True)")
+    parser.add_argument("--no-sequential-rng", dest="sequential_rng", action="store_false",
+                        help="Use fully parallel RNG for maximum performance (may affect RTP)")
+    parser.add_argument("--seed", type=int, default=None,
+                        help="Set a specific random seed for reproducible results")
     args = parser.parse_args()
     
     # Get optimal settings based on hardware and profile
@@ -256,6 +290,17 @@ def main():
         cmd.append("--roe-num-sims")
         cmd.append(str(args.roe_num_sims))
     
+    # Add RNG handling flags
+    if not args.identical_sequence:
+        cmd.append("--no-identical-sequence")
+    
+    if not args.sequential_rng:
+        cmd.append("--no-sequential-rng")
+        
+    if args.seed is not None:
+        cmd.append("--seed")
+        cmd.append(str(args.seed))
+    
     # Print command details
     print("\n=== Running with Optimal Settings ===")
     print(f"Spins: {settings['num_spins']:,}")
@@ -271,6 +316,13 @@ def main():
     roe_status = "Disabled" if not args.calculate_roe else "Enabled"
     roe_method = "Using main data (fast)" if args.roe_use_main_data else f"Separate sims ({args.roe_num_sims})"
     print(f"ROE Calculation: {roe_status} - {roe_method if args.calculate_roe else ''}")
+    
+    # Print RNG settings
+    print(f"RNG Mode: {'Force identical with non-optimized' if args.identical_sequence else 'Optimized parallel'}")
+    if not args.identical_sequence:
+        print(f"Sequential RNG: {'Simulated (consistent RTP)' if args.sequential_rng else 'Disabled (max performance)'}")
+    if args.seed is not None:
+        print(f"Random Seed: {args.seed}")
     
     print(f"Run ID: {run_id}")
     print("\nStarting simulation...")

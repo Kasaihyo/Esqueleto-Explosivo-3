@@ -23,15 +23,19 @@ from simulator import config
 
 LOG_DIR = "simulation_results"
 
-def run_base_game_spin(grid: Grid, base_bet: float, spin_index: int = 0, verbose: bool = False) -> Tuple[float, int]:
+def run_base_game_spin(grid: Grid, base_bet: float, spin_index: int = 0, verbose: bool = False, debug_rtp: bool = False) -> Tuple[float, int]:
     """
     Runs a single complete base game spin sequence (initial drop + avalanches).
     Returns: (total_win_for_spin, total_scatters_landed)
     Added spin_index and verbose flag.
     Removed EW collection tracking as it's FS-specific.
+    Added debug_rtp flag for RTP investigation.
     """
     game_state = "BG"
-    grid.initialize_spin(game_state)
+    # Pass spin index for debugging if debug_rtp is enabled
+    debug_spin_idx = spin_index if debug_rtp else None
+    grid.initialize_spin(game_state, debug_spin_index=debug_spin_idx)
+    
     if verbose:
         print(f"\n--- Spin {spin_index + 1}: Initial Grid --- ")
         grid.display()
@@ -49,16 +53,20 @@ def run_base_game_spin(grid: Grid, base_bet: float, spin_index: int = 0, verbose
             current_multiplier = grid.get_current_multiplier(game_state=game_state)
             win_from_clusters = grid.calculate_win(clusters, base_bet, current_multiplier)
             total_win_for_spin += win_from_clusters
+            
             if verbose:
                 cluster_details = [(s.name, len(c)) for s,c in clusters]
                 print(f"Avalanche {avalanches_in_spin}: Win={win_from_clusters:.2f} (Mult:x{current_multiplier}) Clusters: {cluster_details}")
             # Increment multiplier ONLY for winning clusters
             grid.increment_multiplier(game_state=game_state)
+        elif debug_rtp:
+            print(f"[MAIN-DEBUG] Spin {spin_index + 1}, Avalanche {avalanches_in_spin}: No clusters found")
         # No else needed here, EW explosion handled next
 
         # --- Process Explosions and Wild Spawning ---
         # Now returns: (cleared_coords, ew_collected_count, did_ew_explode_flag, spawned_wild_coords)
         cleared_coords, _ew_collected_this_step, did_ew_explode_flag, spawned_wild_coords = grid.process_explosions_and_spawns(clusters)
+        
         if verbose and did_ew_explode_flag and not clusters:
              print(f"Avalanche {avalanches_in_spin}: No winning clusters, but EW exploded.")
 
@@ -77,8 +85,9 @@ def run_base_game_spin(grid: Grid, base_bet: float, spin_index: int = 0, verbose
             grid.display(highlight_coords=spawned_wild_coords)
 
         # Pass the game state to apply_avalanche for proper symbol generation
-        made_change = len(grid.apply_avalanche(game_state)) > 0
-
+        newly_landed = grid.apply_avalanche(game_state)
+        made_change = len(newly_landed) > 0
+        
         if verbose:
             print("  Grid after avalanche:")
             grid.display()
@@ -109,7 +118,7 @@ def run_base_game_spin(grid: Grid, base_bet: float, spin_index: int = 0, verbose
     if verbose:
         print(f"--- Spin {spin_index + 1} Finished --- ")
         print(f"Total Win: {total_win_for_spin:.2f}, Avalanches: {avalanches_in_spin}, Total Scatters Seen: {scatters_landed_this_spin}")
-
+    
     return total_win_for_spin, scatters_landed_this_spin
 
 def calculate_retrigger_spins(scatter_count: int) -> int:
@@ -226,6 +235,19 @@ def run_free_spins_feature(grid: Grid, base_bet: float, initial_spins: int, trig
         remaining_spins -= 1
         total_fs_win += spin_win_this_fs
 
+        # --- ADDED: Max Win Cap Check ---
+        max_win_cap = base_bet * 7500
+        if total_fs_win >= max_win_cap:
+            capped_win = max_win_cap
+            if verbose:
+                print(f"!!! FS Max Win Cap Reached! Capping win at {capped_win:.2f} (was {total_fs_win:.2f}) !!!", flush=True)
+            total_fs_win = capped_win
+            remaining_spins = 0 # End the feature
+            # We break here to prevent further processing like retriggers/upgrades after hitting the cap
+            break 
+        # --- End Max Win Cap Check ---
+
+        # Check for retriggers only if cap not hit
         if scatters_landed_this_fs_spin >= 2:
            additional_spins = calculate_retrigger_spins(scatters_landed_this_fs_spin)
            if additional_spins > 0:
@@ -233,8 +255,8 @@ def run_free_spins_feature(grid: Grid, base_bet: float, initial_spins: int, trig
                if verbose:
                    print(f"  Retrigger! +{additional_spins} spins (Scatters: {scatters_landed_this_fs_spin}). New Remaining: {remaining_spins}")
 
+        # Check for upgrades only if cap not hit
         ew_collected_session += ew_collected_this_fs_spin
-        # Check for upgrades AFTER accumulating EWs from the completed spin
         if ew_collected_session >= config.FS_EW_COLLECTION_PER_UPGRADE:
             pending_upgrades = ew_collected_session // config.FS_EW_COLLECTION_PER_UPGRADE
             if pending_upgrades > 0:
@@ -275,9 +297,14 @@ def calculate_roe(rtp: float, base_bet_for_sim: float, roe_bet: float = 1.0, num
     Returns:
         A tuple containing (Median ROE, Average ROE) as strings (can be "Infinite").
     """
+    # Infinite ROE if RTP is 100% or higher
     if rtp >= 100.0:
         print("\nCalculating ROE... RTP >= 100%, ROE is Infinite.")
         return "Infinite", "Infinite"
+    # Error if no simulations or no spins allowed
+    if num_roe_sims <= 0 or max_roe_spins <= 0:
+        print(f"\nCalculating ROE... invalid parameters (num_roe_sims={num_roe_sims}, max_roe_spins={max_roe_spins}). ROE Error.")
+        return "Error", "Error"
 
     print(f"\nCalculating ROE ({num_roe_sims:,} simulations, max {max_roe_spins:,} spins each, bet={roe_bet:.2f})...", end='')
     start_balance = roe_bet * 100
@@ -356,8 +383,8 @@ def calculate_roe(rtp: float, base_bet_for_sim: float, roe_bet: float = 1.0, num
         # Return as formatted strings without decimals
         return f"{median_roe:.0f}", f"{average_roe:.0f}"
 
-def run_simulation(num_spins: int, base_bet: float, run_id: str, verbose_spins: int = 0, 
-                  verbose_fs_only: bool = False, return_stats: bool = False, enhanced_stats: bool = False):
+def run_simulation(num_spins: int, base_bet: float, run_id: str, verbose_spins: int = 0,
+                  verbose_fs_only: bool = False, return_stats: bool = False, enhanced_stats: bool = False, seed: int = None):
     """
     Runs the simulation and logs results.
     
@@ -369,18 +396,34 @@ def run_simulation(num_spins: int, base_bet: float, run_id: str, verbose_spins: 
         verbose_fs_only: If True, show verbose output only during Free Spins features
         return_stats: If True, return a dictionary of key statistics (used for testing)
         enhanced_stats: If True, include enhanced statistics in the output
+        seed: Random seed for reproducibility
         
     Returns:
         Dict of statistics if return_stats is True, otherwise None
     """
+    print(f"[{datetime.now().strftime('%H:%M:%S.%f')[:-3]}] run_simulation started")
+
+    # Set a specific random seed if provided for reproducibility
+    if seed is not None:
+        print(f"[{datetime.now().strftime('%H:%M:%S.%f')[:-3]}] Setting random seed: {seed}")
+        random.seed(seed)
+        try:
+            import numpy as np
+            np.random.seed(seed)
+        except ImportError:
+            pass
+            
+    print(f"[{datetime.now().strftime('%H:%M:%S.%f')[:-3]}] Preparing log directories and files...")
     # Ensure log directory exists
     os.makedirs(LOG_DIR, exist_ok=True)
     summary_log_path = os.path.join(LOG_DIR, f"summary_{run_id}.txt")
     spins_log_path = os.path.join(LOG_DIR, f"spins_{run_id}.csv")
 
+    print(f"[{datetime.now().strftime('%H:%M:%S.%f')[:-3]}] Initializing GameState and Grid...")
     # Create a GameState object for the Grid
     game_state = GameState()
     grid = Grid(game_state)
+    print(f"[{datetime.now().strftime('%H:%M:%S.%f')[:-3]}] Initializing statistics variables...")
     total_win = 0.0
     total_scatters_seen = 0 # Total across all spins/avalanches
     spin_wins = [] # Store individual spin wins for stats
@@ -390,10 +433,11 @@ def run_simulation(num_spins: int, base_bet: float, run_id: str, verbose_spins: 
     
     # Enhanced statistics tracking
     top_wins = []  # Store top 10 wins with details
-    win_ranges = [0, 0, 0, 0, 0, 0, 0]  # 0-1x, 1-5x, 5-10x, 10-50x, 50-100x, 100-500x, 500x+
-    win_range_labels = ["0-1x", "1-5x", "5-10x", "10-50x", "50-100x", "100-500x", "500x+"]
+    win_ranges = [0, 0, 0, 0, 0, 0, 0]  # 0-1x, 1-3x, 3-10x, 10-50x, 50-100x, 100-500x, 500x+
+    win_range_labels = ["0-1x", "1-3x", "3-10x", "10-50x", "50-100x", "100-500x", "500x+"]
 
     start_time = time.time()
+    print(f"[{datetime.now().strftime('%H:%M:%S.%f')[:-3]}] Initial setup complete. Start time recorded.")
 
     print(f"Starting simulation run '{run_id}' for {num_spins} spins...")
     print(f"Verbose Base Spins: {verbose_spins}")
@@ -401,13 +445,16 @@ def run_simulation(num_spins: int, base_bet: float, run_id: str, verbose_spins: 
     print(f"Logging summary to: {summary_log_path}")
     print(f"Logging spin details to: {spins_log_path}")
 
+    print(f"[{datetime.now().strftime('%H:%M:%S.%f')[:-3]}] Opening CSV log file...")
     # Open CSV log file for writing spin details
     with open(spins_log_path, 'w', newline='') as csvfile:
         csv_writer = csv.writer(csvfile)
         # Write header row - remove EW Collected column
         csv_writer.writerow(["SpinNumber", "TotalWin", "TotalScattersInSequence", "Hit"])
 
+        print(f"[{datetime.now().strftime('%H:%M:%S.%f')[:-3]}] Entering main simulation loop...")
         for i in range(num_spins):
+            print(f"[{datetime.now().strftime('%H:%M:%S.%f')[:-3]}] --- Starting Spin {i+1} ---")
             # Determine verbosity for this specific spin/feature
             is_base_game_verbose = (i < verbose_spins) and not verbose_fs_only # Only verbose BG if -v is set AND --verbose-fs is NOT set
             is_free_spin_verbose = verbose_fs_only # FS is verbose if the flag is set
@@ -464,9 +511,9 @@ def run_simulation(num_spins: int, base_bet: float, run_id: str, verbose_spins: 
             if current_spin_total_win > 0:
                 if current_spin_total_win <= base_bet:  # 0-1x
                     win_ranges[0] += 1
-                elif current_spin_total_win <= base_bet * 5:  # 1-5x
+                elif current_spin_total_win <= base_bet * 3:  # 1-3x
                     win_ranges[1] += 1
-                elif current_spin_total_win <= base_bet * 10:  # 5-10x
+                elif current_spin_total_win <= base_bet * 10:  # 3-10x
                     win_ranges[2] += 1
                 elif current_spin_total_win <= base_bet * 50:  # 10-50x
                     win_ranges[3] += 1
@@ -646,6 +693,19 @@ if __name__ == "__main__":
     if args.seed is not None:
         print(f"Setting random seed: {args.seed}")
         random.seed(args.seed)
+        # Also set numpy random seed for consistency with optimized version
+        try:
+            import numpy as np
+            np.random.seed(args.seed)
+            print(f"NumPy random seed also set to: {args.seed}")
+        except ImportError:
+            print("NumPy not available, only setting Python random seed")
+            
+        # Log initial RNG samples for reproducibility check
+        _rng_state = random.getstate()
+        _initial_samples = [random.random() for _ in range(5)]
+        random.setstate(_rng_state)
+        print(f"Initial RNG samples: {_initial_samples}")
 
     # In stats-only mode, we automatically enable enhanced stats
     enhanced_stats = args.enhanced_stats or args.stats_only
@@ -655,4 +715,5 @@ if __name__ == "__main__":
                      run_id=args.id,
                      verbose_spins=verbose_bg_spins, # Pass adjusted BG verbose count
                      verbose_fs_only=verbose_fs, # Pass the FS verbose flag
-                     enhanced_stats=enhanced_stats) # Pass the enhanced stats flag
+                     enhanced_stats=enhanced_stats, # Pass the enhanced stats flag
+                     seed=args.seed) # Pass the seed directly to the simulation

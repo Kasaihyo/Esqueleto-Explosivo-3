@@ -1,0 +1,87 @@
+I finlay get RTP right 
+
+SYMBOL_GENERATION_WEIGHTS_BG = {
+    "LADY_SK": 8,
+    "PINK_SK": 25.05,
+    "GREEN_SK": 25.05,
+    "BLUE_SK": 25.05,
+    "ORANGE_SK": 25.05,
+    "CYAN_SK": 25.05,
+    "WILD": 8,
+    "E_WILD": 5,
+    "SCATTER": 0.60
+}
+SYMBOL_GENERATION_WEIGHTS_FS = {
+    "LADY_SK": 6,
+    "PINK_SK": 23,
+    "GREEN_SK": 23,
+    "BLUE_SK": 23,
+    "ORANGE_SK": 23,
+    "CYAN_SK": 23,
+    "WILD": 6,
+    "E_WILD": 2.5,
+    "SCATTER": 0.60
+}
+
+# --- Wild Spawning Probabilities ---
+# GDD 4.7 - P(SpawnW) + P(SpawnEW) = 1
+# Requires tuning.
+
+PROB_SPAWN_WILD = 0.7 # Probability of spawning a standard Wild (Set to 1.0 for test)
+PROB_SPAWN_E_WILD = 0.3 # Probability of spawning an Explosivo Wild (Set to 0.0 for test)
+
+--- Optimized Simulation Summary: auto_20250427_180756 ---
+Timestamp: 2025-04-27 18:08:12
+Hardware: 10 CPU cores with Apple Silicon 11-core ARM (Optimized) [TURBO] acceleration
+Batch Size: 10000 spins, 10 batches
+Total Spins: 100,000
+Base Bet: 1.00
+Total Bet: 100,000.00
+Total Win (BG + FS): 93,527.20
+  Base Game Win: 67,213.80
+  Free Spins Win: 26,313.40
+Return to Player (RTP): 93.5272%
+Median ROE: 454
+Average ROE: 1151
+
+Hit Count: 58,127
+Hit Frequency: 58.13%
+
+Total Scatters Seen (in sequences): 13,815
+Free Spins Triggers (>=3 Scatters): 594
+  FS Trigger Frequency: 0.5940%
+  FS Trigger Rate: ~1 in 168.4 spins
+
+Simulation Time: 15.69 seconds
+Spins per second: 6375.02
+Performance: 0.13x faster than baseline
+
+  Avg Win per FS Trigger: 44.30
+
+Max Win: 519.10 (519.10x)
+
+--- Enhanced Statistics ---
+
+Win Distribution by Ranges:
+  0-1x    :   37,882 hits (65.1711% of hits)
+  1-5x    :   18,541 hits (31.8974% of hits)
+  5-10x   :    1,095 hits ( 1.8838% of hits)
+  10-50x  :      467 hits ( 0.8034% of hits)
+  50-100x :       77 hits ( 0.1325% of hits)
+  100-500x:       63 hits ( 0.1084% of hits)
+  500x+   :        2 hits ( 0.0034% of hits)
+
+Top 10 Wins:
+   1.     519.10 ( 519.10x) (incl. FS) | ████████████████████████████████████████
+   2.     517.50 ( 517.50x) (incl. FS) | ███████████████████████████████████████
+   3.     466.60 ( 466.60x) (incl. FS) | ███████████████████████████████████
+   4.     453.70 ( 453.70x) (incl. FS) | ██████████████████████████████████
+   5.     430.20 ( 430.20x) (incl. FS) | █████████████████████████████████
+   6.     393.10 ( 393.10x) (incl. FS) | ██████████████████████████████
+   7.     365.80 ( 365.80x) (incl. FS) | ████████████████████████████
+   8.     362.10 ( 362.10x) (incl. FS) | ███████████████████████████
+   9.     347.70 ( 347.70x) (incl. FS) | ██████████████████████████
+  10.     327.30 ( 327.30x) (incl. FS) | █████████████████████████
+
+Simulation complete! Results saved to simulation_results/summary_auto_20250427_180756.txt
+Simulation completed successfully!

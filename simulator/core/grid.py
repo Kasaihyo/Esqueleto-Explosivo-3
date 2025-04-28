@@ -92,16 +92,20 @@ class Grid:
         if 0 <= r < self.rows and 0 <= c < self.cols:
             self.symbols[r][c] = symbol
 
-    def initialize_spin(self, game_state=None):
+    def initialize_spin(self, game_state=None, debug_spin_index=None):
         """
         Populates the grid with new symbols for the start of a spin.
         
         Args:
             game_state: Optional GameState object (for backwards compatibility) or string "BG"/"FS"
+            debug_spin_index: Optional spin index for debugging RTP issues
         """
         self.current_multiplier_index_bg = 0 # Reset BG multiplier index
         self.landed_coords.clear()
         newly_landed = set()
+        
+        # Store the debug spin index for use in other methods
+        self._debug_spin_index = debug_spin_index
         
         # Determine if we're in free spins mode
         weights_key = "BG"
@@ -114,7 +118,9 @@ class Grid:
         
         for r in range(self.rows):
             for c in range(self.cols):
-                symbol = generate_random_symbol(weights_key=weights_key)
+                # Create debug ID if debugging is enabled
+                debug_id = f"Spin{debug_spin_index+1}_Init_{r}_{c}" if debug_spin_index is not None else None
+                symbol = generate_random_symbol(weights_key=weights_key, debug_id=debug_id)
                 self._set_symbol(r, c, symbol)
                 newly_landed.add((r, c))
         self.landed_coords = newly_landed
@@ -299,19 +305,38 @@ class Grid:
 
         all_coords_marked_for_clearing = coords_cleared_by_cluster | ew_coords_that_exploded | coords_cleared_by_ew_explosion
 
-        # Wild Spawning - KEEP TRACK of where wilds are spawned
+        # Wild Spawning - spawn a wild for each winning cluster footprint
         coords_receiving_spawned_wild: Set[Tuple[int, int]] = set()
+        
         for footprint in cluster_footprints:
             potential_spawn_locations = list(
                 (footprint & all_coords_marked_for_clearing) - coords_receiving_spawned_wild
             )
             if not potential_spawn_locations:
                 continue
+                
+            # Debug log the potential spawn locations
+            if hasattr(self, '_debug_spin_index') and self._debug_spin_index is not None:
+                debug_id = f"Spin{self._debug_spin_index+1}_WildSpawn"
+                print(f"[WILD-SPAWN-DEBUG] {debug_id}: Potential spawn locations: {potential_spawn_locations}")
+                
             spawn_r, spawn_c = random.choice(potential_spawn_locations)
-            spawn_symbol = config.SYMBOLS["WILD"] if random.random() < config.PROB_SPAWN_WILD else config.SYMBOLS["E_WILD"]
+            
+            # Debug log the selected spawn location
+            if hasattr(self, '_debug_spin_index') and self._debug_spin_index is not None:
+                debug_id = f"Spin{self._debug_spin_index+1}_WildSpawn"
+                print(f"[WILD-SPAWN-DEBUG] {debug_id}: Selected spawn location: ({spawn_r}, {spawn_c})")
+                
+            # Debug log the RNG value for wild type determination
+            wild_rng = random.random()
+            if hasattr(self, '_debug_spin_index') and self._debug_spin_index is not None:
+                debug_id = f"Spin{self._debug_spin_index+1}_WildSpawn"
+                print(f"[WILD-SPAWN-DEBUG] {debug_id}: Wild type RNG value: {wild_rng}, threshold: {config.PROB_SPAWN_WILD}")
+                
+            spawn_symbol = config.SYMBOLS["WILD"] if wild_rng < config.PROB_SPAWN_WILD else config.SYMBOLS["E_WILD"]
             self._set_symbol(spawn_r, spawn_c, spawn_symbol)
             coords_receiving_spawned_wild.add((spawn_r, spawn_c)) # Store the coord
-
+        
         # Final Clearing - Remove symbols marked for clearing, *unless* a wild was just spawned there.
         final_cleared_coords = all_coords_marked_for_clearing - coords_receiving_spawned_wild
         ew_collected_count = 0
@@ -405,7 +430,11 @@ class Grid:
             
             # Fill empty spaces with new symbols
             for r in range(bottom_row, -1, -1):
-                new_symbol = generate_random_symbol(weights_key=weights_key)
+                # Add debug identifier for tracking symbol generation during avalanches
+                debug_id = None
+                if hasattr(self, '_debug_spin_index') and self._debug_spin_index is not None:
+                    debug_id = f"Spin{self._debug_spin_index+1}_Aval_{r}_{c}"
+                new_symbol = generate_random_symbol(weights_key=weights_key, debug_id=debug_id)
                 self._set_symbol(r, c, new_symbol)
                 newly_landed.add((r, c))
 

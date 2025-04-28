@@ -1,0 +1,167 @@
+{
+  "gameInfo": {
+    "name": "Esqueleto Explosivo 3 Clone (Working Title)",
+    "version": "1.0 (Based on Math Spec Rev 4)",
+    "theme": "Day of the Dead festival",
+    "volatility": "High",
+    "targetRTP_BaseGame": 94.22,
+    "targetRTP_FeatureBuy": 94.4,
+    "maxWin": "7,500x total bet"
+  },
+  "coreSetup": {
+    "gridSize": "5x5",
+    "payMechanic": "Cluster Pays (5+ connected symbols)",
+    "features": [
+      "Avalanche Mechanic",
+      "Mucho Multiplier",
+      "Wild Symbols (Standard & Explosivo)",
+      "Wild Spawning",
+      "Scatter Symbol",
+      "Free Spins Feature",
+      "Bet+ Options",
+      "Feature Buy"
+    ]
+  },
+  "symbols": {
+    "highPay": [
+      {"name": "Lady Skull", "id": "LADY_SK"}
+    ],
+    "lowPay": [
+      {"name": "Pink Skull", "id": "PINK_SK"},
+      {"name": "Green Skull", "id": "GREEN_SK"},
+      {"name": "Blue Skull", "id": "BLUE_SK"},
+      {"name": "Orange Skull", "id": "ORANGE_SK"},
+      {"name": "Cyan Skull", "id": "CYAN_SK"}
+    ],
+    "wilds": [
+      {"name": "Standard Wild", "id": "WILD", "substitutes": "HP, LP"},
+      {"name": "Explosivo Wild", "id": "E_WILD", "substitutes": "HP, LP", "feature": "Explosion (destroys nearby LP symbols)"}
+    ],
+    "scatter": {
+      "name": "Silver Robot Skull", "id": "SCATTER", "feature": "Triggers Free Spins"
+    }
+  },
+  "mechanics": {
+    "avalanche": {
+      "description": "Winning clusters are removed, Explosivo Wilds may explode, Wilds may spawn, remaining symbols fall, new symbols drop from above. Repeats on new wins.",
+      "triggersMultiplier": true,
+      "codeImplementation": {
+        "find_clusters": "def find_clusters(self) -> List[Tuple[Symbol, List[Tuple[int, int]]]]:\n    \"\"\"\n    Finds all winning symbol clusters using BFS.\n    Returns a list of tuples: (Symbol, List[coords]).\n    Wilds contribute to clusters but don't form clusters themselves.\n    Scatters and Empty symbols are ignored.\n    ...\"",
+        "process_explosions_and_spawns": "def process_explosions_and_spawns(self, clusters: List[Tuple[Symbol, List[Tuple[int, int]]]]) -> Tuple[Set[Tuple[int, int]], int, bool, Set[Tuple[int, int]]]:\n    \"\"\"\n    Processes winning clusters, Explosivo Wild explosions, and Wild spawning according to GDD.\n    Returns: (set_of_final_cleared_coords, ew_collected_count, did_ew_explode, set_of_spawned_wild_coords)\n    ...\"",
+        "apply_avalanche": "def apply_avalanche(self, game_state=None) -> Set[Tuple[int, int]]:\n    \"\"\"\n    Applies gravity to drop symbols down and fills empty spots from above.\n    Returns the set of coordinates where symbols landed (both dropped and newly filled).\n    Updates self.landed_coords.\n    ...\""
+      }
+    },
+    "muchoMultiplier": {
+      "baseGame": {
+        "start": "1x",
+        "progression": "Increases per cluster win avalanche: 1x, 2x, 4x, 8x, 16x, 32x (Max)",
+        "reset": "Each paid spin",
+        "codeImplementation": {
+          "config": "AVALANCHE_MULTIPLIERS_BG = [1, 2, 4, 8, 16, 32] # 6 steps",
+          "state_update": "def update_after_clusters(self, clusters: List, did_explode: bool):\n    ...\n    if clusters: # Increment only if there were winning clusters\n        self.current_multiplier_index += 1\n        ...\n        else:\n            bg_multipliers = config.AVALANCHE_MULTIPLIERS_BG\n            safe_index = min(self.current_multiplier_index, len(bg_multipliers) - 1)\n            self.current_multiplier = bg_multipliers[safe_index]",
+          "state_reset": "def initialize_spin(self):\n    ...\n    if not self.is_free_spins:\n        self.current_multiplier = config.AVALANCHE_MULTIPLIERS_BG[0]\n        self.current_multiplier_index = 0\n    ..."
+        }
+      },
+      "freeSpins": {
+        "baseMultiplierStart": "1x (persistent, upgradable)",
+        "maxBaseMultiplier": "32x",
+        "activeTrail": "6 steps, starting from current FS Base Multiplier (e.g., Base 2x -> 2x, 4x, ..., 64x)",
+        "maxTrailValue": "1024x",
+        "reset": "Start of each free spin (to current FS Base Multiplier)",
+        "codeImplementation": {
+          "config_trails": "FS_MULTIPLIER_TRAILS = {\n    1: [1, 2, 4, 8, 16, 32],\n    2: [2, 4, 8, 16, 32, 64],\n    4: [4, 8, 16, 32, 64, 128],\n    8: [8, 16, 32, 64, 128, 256],\n    16: [16, 32, 64, 128, 256, 512],\n    32: [32, 64, 128, 256, 512, 1024],\n}",
+          "config_max_base": "MAX_FS_BASE_MULTIPLIER = 32",
+          "state_base_multiplier": "self.fs_base_multiplier: int = 1",
+          "state_update": "def update_after_clusters(self, clusters: List, did_explode: bool):\n    ...\n    if clusters: # Increment only if there were winning clusters\n        self.current_multiplier_index += 1\n        if self.is_free_spins:\n            fs_trail = config.FS_MULTIPLIER_TRAILS.get(self.fs_base_multiplier, config.FS_MULTIPLIER_TRAILS[1])\n            safe_index = min(self.current_multiplier_index, len(fs_trail) - 1)\n            self.current_multiplier = fs_trail[safe_index]\n        ...",
+          "state_reset": "def initialize_spin(self):\n    ...\n    else:\n        # Reset to the start of the current FS trail\n        fs_trail = config.FS_MULTIPLIER_TRAILS.get(self.fs_base_multiplier, config.FS_MULTIPLIER_TRAILS[1])\n        self.current_multiplier = fs_trail[0]\n        self.current_multiplier_index = 0\n    ..."
+        }
+      }
+    },
+    "wildSpawning": {
+      "trigger": "After each winning cluster is removed",
+      "outcome": "Guaranteed 1 Wild (W or EW, probabilistic) placed in an empty spot of the cluster's footprint",
+      "codeImplementation": {
+        "config_prob_w": "PROB_SPAWN_WILD = 0.5 # Probability of spawning a standard Wild",
+        "config_prob_ew": "PROB_SPAWN_E_WILD = 0.5 # Probability of spawning an Explosivo Wild",
+        "grid_logic": "def process_explosions_and_spawns(...):\n    ...\n    # Wild Spawning - spawn a wild for each winning cluster footprint\n    coords_receiving_spawned_wild: Set[Tuple[int, int]] = set()\n    for footprint in cluster_footprints:\n        potential_spawn_locations = list(\n            (footprint & all_coords_marked_for_clearing) - coords_receiving_spawned_wild\n        )\n        if not potential_spawn_locations:\n            continue\n        spawn_r, spawn_c = random.choice(potential_spawn_locations)\n        wild_rng = random.random()\n        spawn_symbol = config.SYMBOLS[\"WILD\"] if wild_rng < config.PROB_SPAWN_WILD else config.SYMBOLS[\"E_WILD\"]\n        self._set_symbol(spawn_r, spawn_c, spawn_symbol)\n        coords_receiving_spawned_wild.add((spawn_r, spawn_c))\n    ..."
+      }
+    },
+    "explosivoWild": {
+      "trigger": "Automatically after win calc if EW landed (not spawned)",
+      "effect": "Explodes 3x3 area, destroying only LP symbols",
+      "interaction": "Triggers Avalanche, does NOT increase multiplier, collected in Free Spins",
+      "codeImplementation": {
+        "grid_logic": "def process_explosions_and_spawns(...):\n    ...\n    # Perform EW explosions for ALL EWs present\n    coords_cleared_by_ew_explosion: Set[Tuple[int, int]] = set()\n    ew_coords_that_exploded: Set[Tuple[int, int]] = set()\n    did_ew_explode = False\n    for r_ew, c_ew in all_ew_coords_on_grid:\n        ew_coords_that_exploded.add((r_ew, c_ew))\n        did_ew_explode = True\n        for dr in [-1, 0, 1]:\n            for dc in [-1, 0, 1]:\n                ...\n                if 0 <= r < self.rows and 0 <= c < self.cols:\n                    symbol_to_clear = self._get_symbol(r, c)\n                    if symbol_to_clear and symbol_to_clear.type == SymbolType.LP:\n                        coords_cleared_by_ew_explosion.add((r, c))\n    ...",
+        "config_symbol": "\"E_WILD\": Symbol(name=\"E_WILD\", type=SymbolType.EXPLOSIVO_WILD)"
+      }
+    },
+    "freeSpins": {
+      "trigger": "3+ Scatters in a spin sequence (BG)",
+      "initialSpins": {
+        "3S": 10,
+        "4S": 12,
+        "5+S": "12 + (N-4)*2",
+        "codeImplementation": {
+          "config_trigger": "FS_TRIGGER_SCATTERS = {3: 10, 4: 12}",
+          "config_extra": "FS_TRIGGER_SCATTERS_EXTRA = 2",
+          "state_logic": "def finalize_spin_sequence(self):\n    ...\n    if not self.is_free_spins: # Check for Base Game trigger\n        if num_scatters >= 3:\n            triggered_fs = True\n            spins_won = config.FS_TRIGGER_SCATTERS.get(num_scatters)\n            if spins_won is None: # Handle 5+\n                max_defined = max(config.FS_TRIGGER_SCATTERS.keys())\n                spins_won = config.FS_TRIGGER_SCATTERS[max_defined] + \\\\n                            (num_scatters - max_defined) * config.FS_TRIGGER_SCATTERS_EXTRA\n            # Transition state if triggered\n            self.is_free_spins = True\n            self.remaining_spins = spins_won\n            self.fs_base_multiplier = 1\n            ..."
+        }
+      },
+      "retrigger": "2+ Scatters during FS",
+      "extraSpins": {
+        "2S": 3,
+        "3S": 5,
+        "4S": 7,
+        "5+S": "7 + (N-4)*2",
+        "codeImplementation": {
+          "config_retrigger": "FS_RETRIGGER_SCATTERS = {2: 3, 3: 5, 4: 7}",
+          "config_extra": "FS_RETRIGGER_SCATTERS_EXTRA = 2",
+          "state_logic": "def finalize_spin_sequence(self):\n    ...\n    else: # Check for Free Spins Retrigger\n        if num_scatters >= 2:\n            spins_won = config.FS_RETRIGGER_SCATTERS.get(num_scatters)\n            if spins_won is None: # Handle 5+\n                max_defined = max(config.FS_RETRIGGER_SCATTERS.keys())\n                spins_won = config.FS_RETRIGGER_SCATTERS[max_defined] + \\\\n                            (num_scatters - max_defined) * config.FS_RETRIGGER_SCATTERS_EXTRA\n            self.remaining_spins += spins_won\n    ..."
+        }
+      },
+      "ewCollectionUpgrade": {
+        "condition": "Every 3 EWs collected (checked end of FS sequence)",
+        "reward": "+1 FS Base Multiplier level (Max 32x), +1 Free Spin",
+        "application": "Start of next Free Spin",
+        "codeImplementation": {
+          "config_ew_per_upgrade": "FS_EW_COLLECTION_PER_UPGRADE = 3",
+          "config_spins_per_upgrade": "FS_SPINS_PER_UPGRADE = 1",
+          "state_check": "def finalize_spin_sequence(self):\n    ...\n    else: # Check for Free Spins Retrigger\n        ...\n        # Check for FS upgrades based on EWs collected *this spin*\n        upgrades_earned = self.fs_ew_collected_this_spin // config.FS_EW_COLLECTION_PER_UPGRADE\n        self.fs_pending_upgrades += upgrades_earned",
+          "state_apply": "def initialize_spin(self):\n    ...\n    # Handle FS upgrades at the start of the *next* spin\n    if self.fs_pending_upgrades > 0:\n        for _ in range(self.fs_pending_upgrades):\n            # Increase base multiplier level\n            current_level_idx = config.FS_BASE_MULTIPLIER_LEVELS.index(self.fs_base_multiplier)\n            next_level_idx = min(current_level_idx + 1, len(config.FS_BASE_MULTIPLIER_LEVELS) - 1)\n            self.fs_base_multiplier = config.FS_BASE_MULTIPLIER_LEVELS[next_level_idx]\n            # Add extra spin\n            self.remaining_spins += config.FS_SPINS_PER_UPGRADE\n        self.fs_pending_upgrades = 0 # Clear pending upgrades",
+          "state_accumulate": "def accumulate_ew_collected(self, count: int):\n    if self.is_free_spins:\n        self.fs_ew_collected_session += count\n        self.fs_ew_collected_this_spin += count",
+          "grid_ew_count_source": "def process_explosions_and_spawns(...):\n    ...\n    ew_collected_count = 0\n    for r, c in final_cleared_coords:\n        symbol_before_clear = self._get_symbol(r,c)\n        if symbol_before_clear and symbol_before_clear.type == SymbolType.EXPLOSIVO_WILD:\n            ew_collected_count += 1\n    for r_ew, c_ew in (ew_coords_that_exploded & coords_receiving_spawned_wild):\n         ew_collected_count += 1\n    return final_cleared_coords, ew_collected_count, did_ew_explode, coords_receiving_spawned_wild"
+        }
+      },
+      "features": [
+        "Enhanced Mucho Multiplier",
+        "Specific FS Symbol Distribution"
+      ],
+      "codeImplementation": {
+        "config_weights": "SYMBOL_GENERATION_WEIGHTS_FS = { ... }",
+        "state_class": "class GameState:\n    ...\n    self.is_free_spins: bool = False\n    self.remaining_spins: int = 0\n    self.fs_base_multiplier: int = 1\n    self.fs_ew_collected_session: int = 0\n    self.fs_ew_collected_this_spin: int = 0\n    self.fs_pending_upgrades: int = 0\n    ..."
+      }
+    },
+    "betPlus": {
+      "availability": "Base Game Only",
+      "options": [
+        {"name": "Bonus Boost", "cost": "1.5x Bet", "effect": "~2x FS trigger chance"},
+        {"name": "The Enrico Show", "cost": "2x Bet", "effect": "Guaranteed 1 EW on initial drop"},
+        {"name": "Bonus Boost Plus", "cost": "3x Bet", "effect": "~5x FS trigger chance"}
+      ],
+      "codeImplementation": {
+        "config_costs": "BETPLUS_BONUS_BOOST_COST = 1.5\nBETPLUS_ENRICO_SHOW_COST = 2.0\nBETPLUS_BONUS_BOOST_PLUS_COST = 3.0",
+        "entry_points": ["simulator/simulator.py (likely involved in applying effects based on args)", "run.py (likely involved in setting up options)"]
+      }
+    },
+    "featureBuy": {
+      "availability": "Base Game Only",
+      "cost": "75x Bet",
+      "outcome": "10 Free Spins",
+      "codeImplementation": {
+        "config_cost": "FEATURE_BUY_COST = 75.0",
+        "config_spins": "FEATURE_BUY_SPINS = 10",
+        "entry_points": ["simulator/simulator.py (likely involved in triggering based on args)", "run.py (likely involved in setting up options)"]
+      }
+    }
+  }
+} 

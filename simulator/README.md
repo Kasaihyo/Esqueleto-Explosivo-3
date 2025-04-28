@@ -22,6 +22,7 @@ The optimized simulator in `optimized.py` provides:
 - Automatic hardware detection and configuration
 - Batch processing for improved memory usage
 - Visualization capabilities for win distributions
+- RNG handling options for consistent results
 
 ## Installation
 
@@ -50,7 +51,7 @@ For the simplest experience, use the provided shell script which automatically d
 Or with custom parameters:
 
 ```bash
-./run.sh --spins 1000000 --bet 2.0
+./run.sh --spins 1000000 --bet 2.0 --seed 12345
 ```
 
 ### Manual Mode
@@ -108,6 +109,32 @@ The optimized simulator automatically detects and utilizes:
 - Multi-core CPUs: Scales processing across available cores
 - Available system memory: Adjusts batch sizes based on RAM
 
-## Documentation
+## RNG Handling Options
 
-For detailed descriptions of command options, see `docs/commands.md`.
+The optimized simulator offers several options for random number generation (RNG) to balance performance and result consistency:
+
+### RNG Modes
+
+1. **Identical Sequence Mode** (default)
+   - Forces the optimized simulator to produce identical results as the standard simulator
+   - Ensures perfect reproducibility when using the same seed
+   - Best for verification, debugging, and result consistency
+   - Example: `./run.sh --seed 12345 --identical-sequence`
+
+2. **Sequential RNG Simulation** (default when identical sequence is disabled)
+   - Simulates the sequential RNG behavior in parallel execution
+   - Produces similar statistical results as the standard simulator
+   - Offers improved performance while maintaining result consistency
+   - Example: `./run.sh --seed 12345 --no-identical-sequence --sequential-rng`
+
+3. **Parallel RNG** (fastest)
+   - Uses fully independent random streams for maximum performance
+   - May produce different RTP results compared to the standard simulator
+   - Best for extremely large simulations where statistical consistency is less critical
+   - Example: `./run.sh --seed 12345 --no-identical-sequence --no-sequential-rng`
+
+### Command Line Options
+
+For a comprehensive list of all command-line options and examples, please refer to:
+- `/docs/commands.md`
+

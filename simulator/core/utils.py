@@ -17,7 +17,7 @@ def _prepare_weights(weights_dict: Tuple[Tuple[str, int], ...]) -> Tuple[List[st
         raise ValueError(f"Total weight of symbols must be positive in weights dict: {weights_dict_actual}")
     return symbol_names, symbol_weights
 
-def generate_random_symbol(weights_key: str = "BG") -> Symbol:
+def generate_random_symbol(weights_key: str = "BG", sim_type: str = "main", debug_id: str = None) -> Symbol:
     """
     Generates a random symbol based on the specified weights (BG or FS) from config.
     
@@ -25,6 +25,8 @@ def generate_random_symbol(weights_key: str = "BG") -> Symbol:
     
     Args:
         weights_key: "BG" or "FS" to select which weight set to use
+        sim_type: "main" or "optimized" to use consistent RNG method
+        debug_id: Optional identifier for debugging RTP issues
         
     Returns:
         A Symbol object from config.SYMBOLS
@@ -39,8 +41,16 @@ def generate_random_symbol(weights_key: str = "BG") -> Symbol:
     weights_tuple = tuple(sorted(weights_dict.items()))
     symbol_names, symbol_weights = _prepare_weights(weights_tuple)
     
-    # Generate a random symbol
+    # Generate a random symbol using a deterministic approach
     chosen_name = random.choices(symbol_names, weights=symbol_weights, k=1)[0]
+    
+    # Debug logging for RTP investigation
+    if debug_id is not None:
+        print(f"[SYMBOL-DEBUG] {debug_id}: Generated symbol {chosen_name} (using {weights_key} weights)")
+        # Log the current RNG state
+        state_hash = hash(str(random.getstate())[:100])  # Just use part of the state to keep log manageable
+        print(f"[SYMBOL-DEBUG] {debug_id}: RNG state hash: {state_hash}")
+    
     return config.SYMBOLS[chosen_name]
 
 # Example usage needs update if run directly

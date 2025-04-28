@@ -1,0 +1,88 @@
+SYMBOL_GENERATION_WEIGHTS_BG = {
+    "LADY_SK": 6.5,  # Unchanged
+    "PINK_SK": 25.8, # Updated from 26.2
+    "GREEN_SK": 25.8, # Updated from 26.2
+    "BLUE_SK": 25.8, # Updated from 26.2
+    "ORANGE_SK": 25.8, # Updated from 26.2
+    "CYAN_SK": 25.8, # Updated from 26.2
+    "WILD": 9.5,   # Updated from 8.5
+    "E_WILD": 4.0,  # Unchanged
+    "SCATTER": 0.60 # Unchanged
+}
+SYMBOL_GENERATION_WEIGHTS_FS = {
+    "LADY_SK": 6,    # Unchanged
+    "PINK_SK": 23.8, # Unchanged
+    "GREEN_SK": 23.8, # Unchanged
+    "BLUE_SK": 23.8, # Unchanged
+    "ORANGE_SK": 23.8, # Unchanged
+    "CYAN_SK": 23.8, # Unchanged
+    "WILD": 7,     # Unchanged
+    "E_WILD": 2.3,  # Unchanged
+    "SCATTER": 0.60 # Unchanged
+}
+
+# --- Wild Spawning Probabilities ---
+# GDD 4.7 - P(SpawnW) + P(SpawnEW) = 1
+# Requires tuning.
+
+PROB_SPAWN_WILD = 0.7 # Probability of spawning a standard Wild (Set to 1.0 for test)
+PROB_SPAWN_E_WILD = 0.3 # Probability of spawning an Explosivo Wild (Set to 0.0 for test)
+
+
+--- Optimized Simulation Summary: auto_20250427_192908 ---
+Timestamp: 2025-04-27 20:27:59
+Hardware: 10 CPU cores with Apple Silicon 11-core ARM (Optimized) [TURBO] acceleration
+Batch Size: 10000 spins, 2000 batches
+Total Spins: 20,000,000
+Base Bet: 1.00
+Total Bet: 20,000,000.00
+Total Win (BG + FS): 19,121,301.80
+  Base Game Win: 14,243,478.70
+  Free Spins Win: 4,877,823.10
+Return to Player (RTP): 95.6065%
+Median ROE: 610
+Average ROE: 2483
+
+Hit Count: 11,905,286
+Hit Frequency: 59.53%
+
+Total Scatters Seen (in sequences): 2,671,232
+Free Spins Triggers (>=3 Scatters): 121,166
+  FS Trigger Frequency: 0.6058%
+  FS Trigger Rate: ~1 in 165.1 spins
+
+Simulation Time: 3530.18 seconds
+Spins per second: 5665.44
+Performance: 0.11x faster than baseline
+
+  Avg Win per FS Trigger: 40.26
+
+Max Win: 1,941.50 (1941.50x)
+
+--- Enhanced Statistics ---
+
+Win Distribution by Ranges:
+  0-1x    : 7,523,159 hits (63.1918% of hits)
+  1-5x    : 4,018,571 hits (33.7545% of hits)
+  5-10x   :  243,155 hits ( 2.0424% of hits)
+  10-50x  :   94,542 hits ( 0.7941% of hits)
+  50-100x :   13,708 hits ( 0.1151% of hits)
+  100-500x:   11,769 hits ( 0.0989% of hits)
+  500x+   :      382 hits ( 0.0032% of hits)
+
+Top 10 Wins:
+   1.   1,941.50 (1941.50x) (incl. FS) | ████████████████████████████████████████
+   2.   1,895.30 (1895.30x) (incl. FS) | ███████████████████████████████████████
+   3.   1,819.10 (1819.10x) (incl. FS) | █████████████████████████████████████
+   4.   1,687.70 (1687.70x) (incl. FS) | ██████████████████████████████████
+   5.   1,552.30 (1552.30x) (incl. FS) | ███████████████████████████████
+   6.   1,350.40 (1350.40x) (incl. FS) | ███████████████████████████
+   7.   1,294.10 (1294.10x) (incl. FS) | ██████████████████████████
+   8.   1,221.40 (1221.40x) (incl. FS) | █████████████████████████
+   9.   1,199.90 (1199.90x) (incl. FS) | ████████████████████████
+  10.   1,093.70 (1093.70x) (incl. FS) | ██████████████████████
+
+Simulation complete! Results saved to simulation_results/summary_auto_20250427_192908.txt
+Simulation completed successfully!
+Find your results in the simulation_results directory.
+Generated       39 result files.

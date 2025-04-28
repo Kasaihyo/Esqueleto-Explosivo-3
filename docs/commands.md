@@ -20,6 +20,12 @@ Options:
 ./run.sh --roe-separate-sims   # Calculate ROE using separate simulations (more accurate but slower)
 ./run.sh --roe-use-main-data   # Calculate ROE using main simulation data (faster, default)
 ./run.sh --roe-num-sims 2000   # Use 2000 simulations for ROE calculation
+./run.sh --seed 12345          # Set a specific random seed for reproducible results
+
+# RNG handling options (for performance vs. consistency)
+./run.sh --identical-sequence  # Force identical results as non-optimized version (default)
+./run.sh --no-identical-sequence --sequential-rng   # Simulate sequential RNG (good balance)
+./run.sh --no-identical-sequence --no-sequential-rng  # Fully parallel RNG (fastest)
 ```
 
 Results appear in `simulation_results/` directory.
@@ -200,6 +206,34 @@ python -m simulator.optimized -n 100000 --enhanced-stats --plots
 ```
 
 This will generate PNG files in the `simulation_results/plots/` directory.
+
+### RNG Handling Options
+
+Control how random number generation works in parallel execution:
+
+#### Force Identical Results as Non-Optimized Version
+
+```bash
+python -m simulator.optimized -n 10000 --seed 12345 --identical-sequence
+```
+
+This ensures perfect reproducibility with the main.py implementation.
+
+#### Use Sequential RNG Simulation
+
+```bash
+python -m simulator.optimized -n 100000 --seed 12345 --no-identical-sequence --sequential-rng
+```
+
+This simulates sequential RNG behavior while still using parallel execution (good balance).
+
+#### Use Fully Parallel RNG (Fastest)
+
+```bash
+python -m simulator.optimized -n 1000000 --seed 12345 --no-identical-sequence --no-sequential-rng
+```
+
+This uses independent random streams for maximum performance, but RTP may differ.
 
 ### ROE Calculation Options
 
