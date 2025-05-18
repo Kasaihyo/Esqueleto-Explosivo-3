@@ -1,33 +1,43 @@
+import logging
 import random
-from typing import Dict, List, Tuple
-from functools import lru_cache
+from typing import Dict, List, Optional, Tuple
 
 # Change relative imports to absolute from project root perspective
 from simulator import config
 from simulator.core.symbol import Symbol
 
-@lru_cache(maxsize=2) # Cache results for BG and FS weights
-def _prepare_weights(weights_dict: Tuple[Tuple[str, int], ...]) -> Tuple[List[str], List[int]]:
-    """Helper to convert weight dict (as tuple for caching) to lists."""
-    weights_dict_actual = dict(weights_dict)
-    symbol_names = list(weights_dict_actual.keys())
-    symbol_weights = list(weights_dict_actual.values())
+
+def _prepare_weights(weights_dict: Dict[str, int]) -> Tuple[List[str], List[int]]:
+    """Helper to convert weight dict to lists."""
+    symbol_names = list(weights_dict.keys())
+    symbol_weights = list(weights_dict.values())
     total_weight = sum(symbol_weights)
     if total_weight <= 0:
-        raise ValueError(f"Total weight of symbols must be positive in weights dict: {weights_dict_actual}")
+        raise ValueError(
+            f"Total weight of symbols must be positive in weights dict: {weights_dict}"
+        )
     return symbol_names, symbol_weights
 
-def generate_random_symbol(weights_key: str = "BG", sim_type: str = "main", debug_id: str = None) -> Symbol:
+
+logger = logging.getLogger(__name__)
+
+
+def generate_random_symbol(
+    weights_key: str = "BG",
+    sim_type: str = "main",
+    debug_id: Optional[str] = None,
+    rng: Optional[random.Random] = None,
+) -> Symbol:
     """
     Generates a random symbol based on the specified weights (BG or FS) from config.
-    
+
     For test mocking, this function can return pre-specified symbols from mock_choices.
-    
+
     Args:
         weights_key: "BG" or "FS" to select which weight set to use
         sim_type: "main" or "optimized" to use consistent RNG method
         debug_id: Optional identifier for debugging RTP issues
-        
+
     Returns:
         A Symbol object from config.SYMBOLS
     """
@@ -36,25 +46,27 @@ def generate_random_symbol(weights_key: str = "BG", sim_type: str = "main", debu
         weights_dict = config.SYMBOL_GENERATION_WEIGHTS_FS
     else:  # Default to Base Game
         weights_dict = config.SYMBOL_GENERATION_WEIGHTS_BG
-    
-    # Convert dict to tuple of items for caching
-    weights_tuple = tuple(sorted(weights_dict.items()))
-    symbol_names, symbol_weights = _prepare_weights(weights_tuple)
-    
-    # Generate a random symbol using a deterministic approach
-    chosen_name = random.choices(symbol_names, weights=symbol_weights, k=1)[0]
-    
+
+    rng = rng or random
+    symbol_names, symbol_weights = _prepare_weights(weights_dict)
+    chosen_name = rng.choices(symbol_names, weights=symbol_weights, k=1)[0]
+
     # Debug logging for RTP investigation
     if debug_id is not None:
-        print(f"[SYMBOL-DEBUG] {debug_id}: Generated symbol {chosen_name} (using {weights_key} weights)")
-        # Log the current RNG state
-        state_hash = hash(str(random.getstate())[:100])  # Just use part of the state to keep log manageable
-        print(f"[SYMBOL-DEBUG] {debug_id}: RNG state hash: {state_hash}")
-    
+        logger.debug(
+            "SYMBOL-DEBUG %s: Generated symbol %s (using %s weights)",
+            debug_id,
+            chosen_name,
+            weights_key,
+        )
+        state_hash = hash(str(rng.getstate())[:100])
+        logger.debug("SYMBOL-DEBUG %s: RNG state hash %s", debug_id, state_hash)
+
     return config.SYMBOLS[chosen_name]
 
+
 # Example usage needs update if run directly
-if __name__ == '__main__':
+if __name__ == "__main__":
     print("--- Base Game Weights ---")
     counts_bg = {name: 0 for name in config.SYMBOL_GENERATION_WEIGHTS_BG.keys()}
     num_samples = 10000
@@ -65,7 +77,9 @@ if __name__ == '__main__':
     total_weight_bg = sum(config.SYMBOL_GENERATION_WEIGHTS_BG.values())
     print(f"BG Symbol generation counts after {num_samples} samples:")
     for name, count in counts_bg.items():
-        expected = (config.SYMBOL_GENERATION_WEIGHTS_BG.get(name, 0) / total_weight_bg) * num_samples
+        expected = (
+            config.SYMBOL_GENERATION_WEIGHTS_BG.get(name, 0) / total_weight_bg
+        ) * num_samples
         print(f"  {name}: {count} (Expected: ~{expected:.1f})")
 
     print("\n--- Free Spins Weights ---")
@@ -77,5 +91,7 @@ if __name__ == '__main__':
     total_weight_fs = sum(config.SYMBOL_GENERATION_WEIGHTS_FS.values())
     print(f"FS Symbol generation counts after {num_samples} samples:")
     for name, count in counts_fs.items():
-        expected = (config.SYMBOL_GENERATION_WEIGHTS_FS.get(name, 0) / total_weight_fs) * num_samples
+        expected = (
+            config.SYMBOL_GENERATION_WEIGHTS_FS.get(name, 0) / total_weight_fs
+        ) * num_samples
         print(f"  {name}: {count} (Expected: ~{expected:.1f})")

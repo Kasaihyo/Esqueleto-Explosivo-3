@@ -368,3 +368,49 @@ python -m simulator.optimized -n 10000 --enhanced-stats
 3. Apple Silicon machines perform best with 8 cores and batch size of 5000
 4. For AMD/Intel processors, use batch sizes closer to 1000-2000
 5. Dedicated GPUs can handle larger batch sizes (10,000+)
+
+## Advanced Engine Flags
+
+The single-source engine (`simulator.main`) now supports hardware tweaks directly:
+
+* `--jit / --no-jit` – enable Numba-accelerated cluster detection (default off; requires Numba)
+* `--jit` typically offers a 2-3× speed-up on large CPU runs.
+
+Example:
+
+```bash
+python -m simulator.main -n 1_000_000 --jit --stats-only
+```
+
+## Weight Optimiser CLI
+
+Use differential evolution (fallback random search) to find symbol weights that reach a target RTP.
+
+```bash
+# Optimise towards 94.5 % RTP and save result to JSON
+python -m tools.weight_optimizer --target 94.5 --out weights_94_5.json --iterations 250 --plot
+
+# Resume optimisation from a previous blob using all CPU cores and convergence plot
+python -m tools.weight_optimizer --target 94.5 --resume weights_94_5.json --cores 8 --plot
+```
+
+## Memory-Usage Benchmark
+
+The repository ships with a helper ensuring memory stays below 1 GiB for 10 M spins:
+
+```bash
+python -m tools.benchmark_memory
+```
+
+## Parallel Batch Simulation
+
+To leverage multiple CPU cores without changing the engine code, run spins in parallel batches and aggregate results:
+
+```bash
+# Distribute 10 M spins across 8 workers
+python tools/run_parallel.py --spins 10000000 --bet 1.0 --cores 8 --seed 12345
+```
+
+This will print an aggregated RTP and hit frequency in minutes on an 8-core machine.
+
+---

@@ -1,19 +1,19 @@
-import unittest
 import random
-from typing import List, Tuple, Optional, Set
+import unittest
+from typing import List, Optional
 
-# Need to import from the simulator module (assuming run from project root)
-from simulator.core.grid import Grid
-from simulator.core.symbol import Symbol, SymbolType
 from simulator import config
-from simulator.core.state import GameState # Import GameState
+from simulator.core.grid import Grid
+from simulator.core.state import GameState
+from simulator.core.symbol import SymbolType
+
 
 # Helper function to create a grid from a list of lists of symbol names
 def create_grid_from_names(names: List[List[Optional[str]]]) -> Grid:
     rows = len(names)
     cols = len(names[0]) if rows > 0 else 0
-    state = GameState() # Grid needs state
-    grid = Grid(state) # Assume default dims
+    state = GameState()  # Grid needs state
+    grid = Grid(state)  # Assume default dims
     for r in range(rows):
         for c in range(cols):
             # Add boundary checks
@@ -23,8 +23,8 @@ def create_grid_from_names(names: List[List[Optional[str]]]) -> Grid:
                 grid._set_symbol(r, c, symbol)
     return grid
 
-class TestExplosions(unittest.TestCase):
 
+class TestExplosions(unittest.TestCase):
     def test_ew_explosion_center_lps(self):
         """Test EW explosion in center surrounded by LPs."""
         # Use actual symbol names from config
@@ -36,29 +36,43 @@ class TestExplosions(unittest.TestCase):
             ["CYAN_SK", "CYAN_SK", "CYAN_SK", "CYAN_SK", "CYAN_SK"],
         ]
         grid = create_grid_from_names(names)
-        grid.landed_coords = set() # Assume EW landed
+        ew_coord = (2, 2)
+        landed_coords_for_test = {ew_coord}  # Pass the EW's coord as landed
         # Doesn't matter if landed or spawned now, it should explode
 
         # No winning clusters in this setup
         clusters = []
-        cleared_coords, ew_collected, did_explode, spawned_coords = grid.process_explosions_and_spawns(clusters)
+        (
+            cleared_coords,
+            ew_collected,
+            did_explode,
+            ew_explosion_details,
+            spawned_coords,
+        ) = grid.process_explosions_and_spawns(clusters, landed_coords_for_test)
 
         self.assertTrue(did_explode)
+        self.assertTrue(ew_explosion_details)
         self.assertEqual(ew_collected, 1)
-        self.assertEqual(len(spawned_coords), 0) # No clusters, no spawns
+        self.assertEqual(len(spawned_coords), 0)  # No clusters, no spawns
         # Expect 3x3 area of LPs + the EW itself to be cleared (9 symbols)
         self.assertEqual(len(cleared_coords), 9)
         expected_cleared = {
-            (1, 1), (1, 2), (1, 3),
-            (2, 1), (2, 2), (2, 3),
-            (3, 1), (3, 2), (3, 3),
+            (1, 1),
+            (1, 2),
+            (1, 3),
+            (2, 1),
+            (2, 2),
+            (2, 3),
+            (3, 1),
+            (3, 2),
+            (3, 3),
         }
         self.assertSetEqual(cleared_coords, expected_cleared)
 
         # Verify grid state after clearing (check one cleared and one uncleared)
-        self.assertEqual(grid._get_symbol(2, 2).name, "EMPTY") # EW position
-        self.assertEqual(grid._get_symbol(1, 1).name, "EMPTY") # LP position
-        self.assertEqual(grid._get_symbol(0, 0).name, "CYAN_SK")   # Uncleared position
+        self.assertEqual(grid._get_symbol(2, 2).name, "EMPTY")  # EW position
+        self.assertEqual(grid._get_symbol(1, 1).name, "EMPTY")  # LP position
+        self.assertEqual(grid._get_symbol(0, 0).name, "CYAN_SK")  # Uncleared position
 
     def test_ew_explosion_corner_lps(self):
         """Test EW explosion in corner surrounded by LPs."""
@@ -71,11 +85,21 @@ class TestExplosions(unittest.TestCase):
             ["CYAN_SK", "CYAN_SK", "CYAN_SK", "CYAN_SK", "CYAN_SK"],
         ]
         grid = create_grid_from_names(names)
-        grid.landed_coords = set() # Assume EW landed
+        ew_coord = (0, 0)
+        landed_coords_for_test = {ew_coord}  # Pass the EW's coord as landed
+        grid.landed_coords = landed_coords_for_test  # Set this for the function to use
+
         clusters = []
-        cleared_coords, ew_collected, did_explode, spawned_coords = grid.process_explosions_and_spawns(clusters)
+        (
+            cleared_coords,
+            ew_collected,
+            did_explode,
+            ew_explosion_details,
+            spawned_coords,
+        ) = grid.process_explosions_and_spawns(clusters, landed_coords_for_test)
 
         self.assertTrue(did_explode)
+        self.assertTrue(ew_explosion_details)
         self.assertEqual(ew_collected, 1)
         self.assertEqual(len(spawned_coords), 0)
         # Expect 2x2 area of LPs + the EW itself to be cleared (4 symbols)
@@ -92,42 +116,73 @@ class TestExplosions(unittest.TestCase):
         names = [
             ["CYAN_SK", "CYAN_SK", "CYAN_SK", "CYAN_SK", "CYAN_SK"],
             ["CYAN_SK", "LADY_SK", "WILD", "SCATTER", "CYAN_SK"],
-            ["CYAN_SK", "PINK_SK", "E_WILD", "PINK_SK", "CYAN_SK"], # First EW
-            ["CYAN_SK", "LADY_SK", "E_WILD", "GREEN_SK", "CYAN_SK"], # Second EW
+            ["CYAN_SK", "PINK_SK", "E_WILD", "PINK_SK", "CYAN_SK"],  # First EW
+            ["CYAN_SK", "LADY_SK", "E_WILD", "GREEN_SK", "CYAN_SK"],  # Second EW
             ["CYAN_SK", "CYAN_SK", "CYAN_SK", "CYAN_SK", "CYAN_SK"],
         ]
         grid = create_grid_from_names(names)
-        grid.landed_coords = set() # Assume EWs landed
+        ew_coords = {(2, 2), (3, 2)}
+        landed_coords_for_test = ew_coords  # Pass both EW coords as landed
+        grid.landed_coords = landed_coords_for_test
+
         clusters = []
-        cleared_coords, ew_collected, did_explode, spawned_coords = grid.process_explosions_and_spawns(clusters)
+        (
+            cleared_coords,
+            ew_collected,
+            did_explode,
+            ew_explosion_details,
+            spawned_coords,
+        ) = grid.process_explosions_and_spawns(clusters, landed_coords_for_test)
 
         self.assertTrue(did_explode)
-        self.assertEqual(ew_collected, 2) # Both EWs collected
+        self.assertTrue(ew_explosion_details)
+        self.assertEqual(
+            len(ew_explosion_details), 2
+        )  # Check two explosions were recorded
+        self.assertEqual(ew_collected, 2)  # Both EWs collected
         self.assertEqual(len(spawned_coords), 0)
 
         # According to the PRD, only LP symbols should be destroyed by EW explosions
         # And EWs themselves are removed.
         # Expected clears: The two EWs themselves, plus the 3 LPs (PINK_SK, PINK_SK, GREEN_SK)
         expected_cleared = {
-            (2, 2), (3, 2), # The EWs
-            (2, 1), (2, 3), # PINK_SKs next to first EW
-            (3, 3)          # GREEN_SK next to second EW
+            (2, 2),
+            (3, 2),  # The EWs
+            (2, 1),
+            (2, 3),  # PINK_SKs next to first EW
+            (3, 3),  # GREEN_SK next to second EW
         }
-        
+
         # Our implementation may clear additional CYAN_SK symbols, which are also LP symbols
         # Let's check that at minimum, our expected symbols are cleared
         # And that no HP, Wild, or Scatter symbols were cleared
         self.assertGreaterEqual(len(cleared_coords), 5)
-        
+
         # Check that our expected coordinates are all in the cleared set
         for coord in expected_cleared:
-            self.assertIn(coord, cleared_coords, f"Expected {coord} to be cleared but it wasn't")
-            
+            self.assertIn(
+                coord, cleared_coords, f"Expected {coord} to be cleared but it wasn't"
+            )
+
         # Verify non-LPs were NOT cleared - this is the key test criteria
-        self.assertEqual(grid._get_symbol(1, 1).name, "LADY_SK", "LADY_SK (HP) should not have been cleared")
-        self.assertEqual(grid._get_symbol(1, 2).name, "WILD", "WILD should not have been cleared")
-        self.assertEqual(grid._get_symbol(1, 3).name, "SCATTER", "SCATTER should not have been cleared") 
-        self.assertEqual(grid._get_symbol(3, 1).name, "LADY_SK", "LADY_SK (HP) should not have been cleared")
+        self.assertEqual(
+            grid._get_symbol(1, 1).name,
+            "LADY_SK",
+            "LADY_SK (HP) should not have been cleared",
+        )
+        self.assertEqual(
+            grid._get_symbol(1, 2).name, "WILD", "WILD should not have been cleared"
+        )
+        self.assertEqual(
+            grid._get_symbol(1, 3).name,
+            "SCATTER",
+            "SCATTER should not have been cleared",
+        )
+        self.assertEqual(
+            grid._get_symbol(3, 1).name,
+            "LADY_SK",
+            "LADY_SK (HP) should not have been cleared",
+        )
         # Verify LPs and EWs *were* cleared
         self.assertEqual(grid._get_symbol(2, 2).name, "EMPTY")
         self.assertEqual(grid._get_symbol(3, 2).name, "EMPTY")
@@ -142,14 +197,21 @@ class TestExplosions(unittest.TestCase):
             ["CYAN_SK", "PINK_SK", "PINK_SK", "PINK_SK", "CYAN_SK"],
             ["CYAN_SK", "PINK_SK", "E_WILD", "PINK_SK", "CYAN_SK"],
             ["CYAN_SK", "PINK_SK", "PINK_SK", "PINK_SK", "CYAN_SK"],
-            ["CYAN_SK", "BLUE_SK", "BLUE_SK", "BLUE_SK", "BLUE_SK"], # Added another cluster to avoid unrelated spawns
+            [
+                "CYAN_SK",
+                "BLUE_SK",
+                "BLUE_SK",
+                "BLUE_SK",
+                "BLUE_SK",
+            ],  # Added another cluster to avoid unrelated spawns
         ]
         grid = create_grid_from_names(names)
-        grid.landed_coords = set() # Assume EW landed
+        ew_coord = (2, 2)
+        landed_coords_for_test = {ew_coord}  # Pass EW coord as landed
 
         # Cluster of PINK_SK also exists (plus the EW)
         clusters = grid.find_clusters()
-        self.assertEqual(len(clusters), 2) # PNK cluster + BLU cluster
+        self.assertEqual(len(clusters), 2)  # PNK cluster + BLU cluster
         # Find the PINK cluster
         pnk_cluster_info = None
         for s, coords in clusters:
@@ -159,22 +221,35 @@ class TestExplosions(unittest.TestCase):
         self.assertIsNotNone(pnk_cluster_info)
         symbol_pnk, coords_pnk = pnk_cluster_info
         self.assertEqual(symbol_pnk.name, "PINK_SK")
-        self.assertEqual(len(coords_pnk), 9) # 8 PNK + 1 EW
+        self.assertEqual(len(coords_pnk), 9)  # 8 PNK + 1 EW
 
         # Set seed for predictable wild spawn type/location
         random.seed(42)
         # Pass only the PINK cluster to simulate processing just that win + explosion
-        cleared_coords, ew_collected, did_explode, spawned_coords = grid.process_explosions_and_spawns([pnk_cluster_info])
+        (
+            cleared_coords,
+            ew_collected,
+            did_explode,
+            ew_explosion_details,
+            spawned_coords,
+        ) = grid.process_explosions_and_spawns(
+            [pnk_cluster_info], landed_coords_for_test
+        )
 
-        self.assertTrue(did_explode) # EW should still explode
-        self.assertEqual(ew_collected, 1) # EW is collected
+        self.assertTrue(did_explode)
+        self.assertTrue(ew_explosion_details)  # EW should still explode
+        self.assertEqual(
+            ew_collected, 1
+        )  # EW was collected (either via cluster or explosion)
 
         # Expect 1 wild to spawn in the footprint of the PINK cluster
         self.assertEqual(len(spawned_coords), 1)
         spawned_coord = list(spawned_coords)[0]
         spawned_symbol = grid._get_symbol(spawned_coord[0], spawned_coord[1])
         self.assertIsNotNone(spawned_symbol)
-        self.assertTrue(spawned_symbol.type in [SymbolType.WILD, SymbolType.EXPLOSIVO_WILD])
+        self.assertTrue(
+            spawned_symbol.type in [SymbolType.WILD, SymbolType.EXPLOSIVO_WILD]
+        )
 
         # Expected clears: The original 9 cluster coords, MINUS the coord that got the spawned wild
         # PLUS any additional LPs cleared ONLY by explosion (none in this case)
@@ -190,17 +265,33 @@ class TestExplosions(unittest.TestCase):
         names = [
             ["CYAN_SK", "CYAN_SK", "CYAN_SK", "CYAN_SK", "CYAN_SK"],
             ["CYAN_SK", "LADY_SK", "WILD", "SCATTER", "CYAN_SK"],
-            ["CYAN_SK", "LADY_SK", "E_WILD", "WILD", "CYAN_SK"], # EW surrounded by non-LPs
+            [
+                "CYAN_SK",
+                "LADY_SK",
+                "E_WILD",
+                "WILD",
+                "CYAN_SK",
+            ],  # EW surrounded by non-LPs
             ["CYAN_SK", "SCATTER", "LADY_SK", "LADY_SK", "CYAN_SK"],
             ["CYAN_SK", "CYAN_SK", "CYAN_SK", "CYAN_SK", "CYAN_SK"],
         ]
         grid = create_grid_from_names(names)
-        grid.landed_coords = set() # Assume EW landed
-        clusters = [] # No winning clusters
-        cleared_coords, ew_collected, did_explode, spawned_coords = grid.process_explosions_and_spawns(clusters)
+        ew_coord = (2, 2)
+        landed_coords_for_test = {ew_coord}  # Pass EW coord as landed
+        grid.landed_coords = landed_coords_for_test  # Set this for the function to use
+
+        clusters = []  # No winning clusters
+        (
+            cleared_coords,
+            ew_collected,
+            did_explode,
+            ew_explosion_details,
+            spawned_coords,
+        ) = grid.process_explosions_and_spawns(clusters, landed_coords_for_test)
 
         # Explosion should still happen and be reported
         self.assertTrue(did_explode)
+        self.assertTrue(ew_explosion_details)
         self.assertEqual(ew_collected, 1)
         self.assertEqual(len(spawned_coords), 0)
 
@@ -224,31 +315,49 @@ class TestExplosions(unittest.TestCase):
         # Use actual symbol names
         names = [
             ["PINK_SK", "PINK_SK", "PINK_SK", "PINK_SK", "CYAN_SK"],
-            ["PINK_SK", "E_WILD", "PINK_SK", "PINK_SK", "CYAN_SK"], # EW part of PINK_SK cluster
+            [
+                "PINK_SK",
+                "E_WILD",
+                "PINK_SK",
+                "PINK_SK",
+                "CYAN_SK",
+            ],  # EW part of PINK_SK cluster
             ["PINK_SK", "PINK_SK", "PINK_SK", "PINK_SK", "CYAN_SK"],
             ["CYAN_SK", "CYAN_SK", "CYAN_SK", "CYAN_SK", "CYAN_SK"],
-            ["CYAN_SK", "CYAN_SK", "CYAN_SK", "CYAN_SK", "CYAN_SK"]
+            ["CYAN_SK", "CYAN_SK", "CYAN_SK", "CYAN_SK", "CYAN_SK"],
         ]
         grid = create_grid_from_names(names)
-        grid.landed_coords = set() # Assume EW landed
+        ew_coord = (1, 1)
+        landed_coords_for_test = {ew_coord}  # Pass EW coord as landed
 
-        clusters = grid.find_clusters() # Should find the PINK_SK cluster including the EW
-        
+        clusters = (
+            grid.find_clusters()
+        )  # Should find the PINK_SK cluster including the EW
+
         # Extract only the PINK_SK cluster for this test
         # Note: In a real game, all valid clusters (including CYAN_SK) would be processed
         pink_clusters = [c for c in clusters if c[0].name == "PINK_SK"]
-        
-        self.assertEqual(len(pink_clusters), 1, "Should find exactly one PINK_SK cluster")
+
+        self.assertEqual(
+            len(pink_clusters), 1, "Should find exactly one PINK_SK cluster"
+        )
         symbol_pnk, coords_pnk = pink_clusters[0]
         self.assertEqual(symbol_pnk.name, "PINK_SK")
-        self.assertIn((1, 1), coords_pnk) # Ensure EW coord is part of cluster
+        self.assertIn((1, 1), coords_pnk)  # Ensure EW coord is part of cluster
 
         # Set seed for predictable wild spawn type/location if needed
         random.seed(123)
-        cleared_coords, ew_collected, did_explode, spawned_coords = grid.process_explosions_and_spawns(clusters)
+        (
+            cleared_coords,
+            ew_collected,
+            did_explode,
+            ew_explosion_details,
+            spawned_coords,
+        ) = grid.process_explosions_and_spawns(clusters, landed_coords_for_test)
 
         # Explosion should happen
         self.assertTrue(did_explode)
+        self.assertTrue(ew_explosion_details)
         # EW should be collected exactly once (logic prevents double counting)
         self.assertEqual(ew_collected, 1)
         # In our implementation, wilds are spawned for BOTH valid clusters (PINK_SK and CYAN_SK)
@@ -259,49 +368,60 @@ class TestExplosions(unittest.TestCase):
         for spawned_coord in spawned_coords:
             spawned_symbol = grid._get_symbol(spawned_coord[0], spawned_coord[1])
             self.assertIsNotNone(spawned_symbol)
-            self.assertTrue(spawned_symbol.type in [SymbolType.WILD, SymbolType.EXPLOSIVO_WILD])
-            
+            self.assertTrue(
+                spawned_symbol.type in [SymbolType.WILD, SymbolType.EXPLOSIVO_WILD]
+            )
+
             # Check if this wild was spawned in the PINK cluster area (top half of grid)
             r, c = spawned_coord
             if r < 3:  # Top half of grid where PINK_SK is
                 pink_spawned = True
-                
+
         # Assert that at least one wild was spawned for the PINK_SK cluster
         self.assertTrue(pink_spawned, "No wild was spawned for the PINK_SK cluster")
 
         # Verify clearing: All original cluster symbols + LPs destroyed by explosion, minus the spawned wild coord
-        original_cluster_coords = set(coords_pnk) # Includes the EW at (1, 1)
+        original_cluster_coords = set(coords_pnk)  # Includes the EW at (1, 1)
 
         # Manually calculate expected LPs hit by explosion centered at (1,1)
-        explosion_area = {(r,c) for r in range(3) for c in range(3)}
+        explosion_area = {(r, c) for r in range(3) for c in range(3)}
         lps_hit_by_explosion = set()
-        for r,c in explosion_area:
-            symbol = grid.get_symbol(r,c) # Use get_symbol for safety
+        for r, c in explosion_area:
+            symbol = grid.get_symbol(r, c)  # Use get_symbol for safety
             if symbol and symbol.type == SymbolType.LP:
-                lps_hit_by_explosion.add((r,c))
+                lps_hit_by_explosion.add((r, c))
 
         # Our implementation now properly detects both PINK_SK and CYAN_SK clusters
         # The original test assumed only PINK_SK would be detected
         # But according to the GDD/PRD, both are valid clusters
-        
+
         # Instead of checking exact equality, check that each of these coords is in the cleared set
         expected_minimal_cleared = {(1, 1)}  # At minimum the EW should be cleared
         for coord in expected_minimal_cleared:
-            self.assertIn(coord, cleared_coords, f"{coord} should be in the cleared coordinates")
-            
+            self.assertIn(
+                coord, cleared_coords, f"{coord} should be in the cleared coordinates"
+            )
+
         # Also check that the PINK_SK cluster near the EW was cleared (some coordinates)
         pink_coords_in_explosion = {(0, 0), (0, 1), (0, 2), (1, 0), (2, 0), (2, 1)}
         for coord in pink_coords_in_explosion:
             # Skip coords where a wild spawned
             if coord not in spawned_coords:
-                self.assertIn(coord, cleared_coords, f"{coord} should be in the cleared coordinates")
+                self.assertIn(
+                    coord,
+                    cleared_coords,
+                    f"{coord} should be in the cleared coordinates",
+                )
 
         # Double check the EW location is now empty or contains the spawned wild
         symbol_at_ew_pos = grid._get_symbol(1, 1)
         if spawned_coord == (1, 1):
-            self.assertTrue(symbol_at_ew_pos.type in [SymbolType.WILD, SymbolType.EXPLOSIVO_WILD])
+            self.assertTrue(
+                symbol_at_ew_pos.type in [SymbolType.WILD, SymbolType.EXPLOSIVO_WILD]
+            )
         else:
             self.assertEqual(symbol_at_ew_pos.name, "EMPTY")
 
-if __name__ == '__main__':
-    unittest.main() 
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,11 +1,14 @@
 import unittest
-from typing import List, Tuple, Optional, Set
 
-# Need to import from the simulator module
-from simulator.core.grid import Grid
-from simulator.core.symbol import Symbol, SymbolType
 from simulator import config
-from simulator.core.state import GameState # Import GameState
+from simulator.core.grid import Grid
+
+# from simulator.core.symbol import Symbol, SymbolType # F401 unused
+from simulator.core.rng import SpinRNG  # Used for Grid instantiation
+from simulator.core.state import GameState
+
+# from typing import List, Optional, Set, Tuple # F401 All unused
+
 
 # Helper function (can be moved to a shared helper file later)
 # --- REMOVE UNUSED HELPER --- #
@@ -20,31 +23,41 @@ from simulator.core.state import GameState # Import GameState
 #             grid._set_symbol(r, c, symbol)
 #     return grid
 
-class TestPayouts(unittest.TestCase):
 
-    def setUp(self): # Use setUp to create a grid instance for tests if needed
+class TestPayouts(unittest.TestCase):
+    def setUp(self):  # Use setUp to create a grid instance for tests if needed
         self.state = GameState()
         # This init caused TypeError: 'GameState' object cannot be interpreted as an integer
         # This implies Grid(state) IS the correct call, but the Grid.__init__ itself has an issue
         # Let's assume the Grid.__init__ needs fixing externally.
         # The call here seems correct based on other errors.
-        self.grid = Grid(self.state) # Standard 5x5 grid, requires state
-        self.base_bet = config.BASE_BET # Use base bet from config
+        self.grid = Grid(self.state)  # Standard 5x5 grid, requires state
+        self.base_bet = config.BASE_BET  # Use base bet from config
 
     def test_payout_min_cluster_lp(self):
         """Test payout for minimum size (5) low-pay cluster."""
-        symbol = config.SYMBOLS["CYAN_SK"] # Lowest LP
-        coords = [(0,0), (0,1), (0,2), (1,0), (1,1)]
+        symbol = config.SYMBOLS["CYAN_SK"]  # Lowest LP
+        coords = [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1)]
         clusters = [(symbol, coords)]
-        multiplier = 1 # Base game, first avalanche
+        multiplier = 1  # Base game, first avalanche
         expected_payout = self.base_bet * config.PAYTABLE["CYAN_SK"][5] * multiplier
         actual_payout = self.grid.calculate_win(clusters, self.base_bet, multiplier)
         self.assertAlmostEqual(actual_payout, expected_payout)
 
     def test_payout_mid_cluster_hp(self):
         """Test payout for medium size (9) high-pay cluster."""
-        symbol = config.SYMBOLS["LADY_SK"] # HP
-        coords = [(0,0), (0,1), (0,2), (1,0), (1,1), (1,2), (2,0), (2,1), (2,2)] # 9 symbols
+        symbol = config.SYMBOLS["LADY_SK"]  # HP
+        coords = [
+            (0, 0),
+            (0, 1),
+            (0, 2),
+            (1, 0),
+            (1, 1),
+            (1, 2),
+            (2, 0),
+            (2, 1),
+            (2, 2),
+        ]  # 9 symbols
         clusters = [(symbol, coords)]
         multiplier = 1
         # Payout uses the 8-9 bracket (index 9 in config)
@@ -68,9 +81,9 @@ class TestPayouts(unittest.TestCase):
     def test_payout_base_game_multiplier(self):
         """Test payout with a base game multiplier."""
         symbol = config.SYMBOLS["GREEN_SK"]
-        coords = [(0,0), (0,1), (0,2), (0,3), (0,4)] # 5 symbols
+        coords = [(0, 0), (0, 1), (0, 2), (0, 3), (0, 4)]  # 5 symbols
         clusters = [(symbol, coords)]
-        multiplier = 8 # Example BG multiplier
+        multiplier = 8  # Example BG multiplier
         expected_payout = self.base_bet * config.PAYTABLE["GREEN_SK"][5] * multiplier
         actual_payout = self.grid.calculate_win(clusters, self.base_bet, multiplier)
         self.assertAlmostEqual(actual_payout, expected_payout)
@@ -79,7 +92,7 @@ class TestPayouts(unittest.TestCase):
         """Test payout logic with an FS multiplier (using config rules)."""
         # Simulate FS state: Base Level 4x, 3rd avalanche (index 2)
         fs_base = 4
-        fs_avalanche_count = 2 # Corresponds to index 2 in the trail
+        fs_avalanche_count = 2  # Corresponds to index 2 in the trail
 
         # Calculate multiplier based on config.FS_MUCHO_MULTIPLIER_TRAIL
         # Find the trail for the base multiplier
@@ -93,7 +106,7 @@ class TestPayouts(unittest.TestCase):
         self.assertEqual(multiplier, 16)
 
         symbol = config.SYMBOLS["LADY_SK"]
-        coords = [(0,0), (0,1), (1,0), (1,1), (2,0)] # 5 symbols
+        coords = [(0, 0), (0, 1), (1, 0), (1, 1), (2, 0)]  # 5 symbols
         clusters = [(symbol, coords)]
         expected_payout = self.base_bet * config.PAYTABLE["LADY_SK"][5] * multiplier
         actual_payout = self.grid.calculate_win(clusters, self.base_bet, multiplier)
@@ -102,9 +115,9 @@ class TestPayouts(unittest.TestCase):
     def test_payout_zero_for_non_paying(self):
         """Test zero payout for clusters of non-paying symbols."""
         clusters = [
-            (config.SYMBOLS["WILD"], [(0,0), (0,1), (0,2), (0,3), (0,4)]),
-            (config.SYMBOLS["SCATTER"], [(1,0), (1,1), (1,2), (1,3), (1,4)]),
-            (config.SYMBOLS["E_WILD"], [(2,0), (2,1), (2,2), (2,3), (2,4)]),
+            (config.SYMBOLS["WILD"], [(0, 0), (0, 1), (0, 2), (0, 3), (0, 4)]),
+            (config.SYMBOLS["SCATTER"], [(1, 0), (1, 1), (1, 2), (1, 3), (1, 4)]),
+            (config.SYMBOLS["E_WILD"], [(2, 0), (2, 1), (2, 2), (2, 3), (2, 4)]),
         ]
         multiplier = 1
         actual_payout = self.grid.calculate_win(clusters, self.base_bet, multiplier)
@@ -118,5 +131,5 @@ class TestPayouts(unittest.TestCase):
         self.assertAlmostEqual(actual_payout, 0.0)
 
 
-if __name__ == '__main__':
-    unittest.main() 
+if __name__ == "__main__":
+    unittest.main()

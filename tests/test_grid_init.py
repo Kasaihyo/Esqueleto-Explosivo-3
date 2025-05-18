@@ -1,23 +1,36 @@
+# import os # F401 unused
+# import random # F401 unused
+# import sys # F401 unused
 import unittest
-import sys
-import os
-from unittest.mock import patch, MagicMock
-# Add project root to sys.path to allow absolute imports
+
+# from simulator.config import SYMBOLS # F401 unused
+from simulator import config  # config itself is used
+from simulator.config import (  # Added missing imports
+    GRID_COLS,
+    GRID_ROWS,
+    SYMBOL_GENERATION_WEIGHTS_BG,
+    SYMBOL_GENERATION_WEIGHTS_FS,
+)
+from simulator.core.grid import Grid
+
+# from simulator.core.symbol import Symbol, SymbolType # F401 unused
+from simulator.core.rng import SpinRNG  # Used in tests
+from simulator.core.state import GameState
+from simulator.core.utils import generate_random_symbol  # Used in a test
+
+# from typing import Dict, List, Optional, Set, Tuple # F401 All unused
+# from unittest.mock import MagicMock, patch # F401 All unused
+
+
+# Helper function to create a grid from a list of lists of symbol names
 # project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 # sys.path.insert(0, project_root)
 
-import random
-from typing import List, Tuple, Optional, Set, Dict
-
-# Need to import from the simulator module
-from simulator.core.grid import Grid
-from simulator.core.symbol import Symbol, SymbolType
-from simulator.core.state import GameState
-from simulator.config import GRID_ROWS, GRID_COLS, SYMBOLS, SYMBOL_GENERATION_WEIGHTS_BG, SYMBOL_GENERATION_WEIGHTS_FS
 
 # Dummy symbols for testing (Moved to setUpClass)
 # DUMMY_BG_SYMBOLS: Dict[str, Symbol] = { ... }
 # DUMMY_FS_SYMBOLS: Dict[str, Symbol] = { ... }
+
 
 class TestGridInitialization(unittest.TestCase):
     """Tests for the Grid class initialization and symbol population."""
@@ -86,10 +99,13 @@ class TestGridInitialization(unittest.TestCase):
                 symbol = self.grid.get_symbol(r, c)
                 self.assertIsNotNone(symbol)
                 self.assertNotEqual(symbol.name, "EMPTY")
-                self.assertIn(symbol.name, valid_bg_symbols, f"Symbol {symbol.name} at ({r},{c}) not in BG weights")
+                self.assertIn(
+                    symbol.name,
+                    valid_bg_symbols,
+                    f"Symbol {symbol.name} at ({r},{c}) not in BG weights",
+                )
                 found_non_empty = True
         self.assertTrue(found_non_empty, "Grid was not populated with any symbols.")
-
 
     # @patch('random.choices')
     # @patch('simulator.core.grid.SYMBOLS', new_callable=lambda: TestGridInitialization.DUMMY_SYMBOLS_DICT_FS)
@@ -110,10 +126,15 @@ class TestGridInitialization(unittest.TestCase):
                 symbol = self.grid.get_symbol(r, c)
                 self.assertIsNotNone(symbol)
                 self.assertNotEqual(symbol.name, "EMPTY")
-                self.assertIn(symbol.name, valid_fs_symbols, f"Symbol {symbol.name} at ({r},{c}) not in FS weights")
+                self.assertIn(
+                    symbol.name,
+                    valid_fs_symbols,
+                    f"Symbol {symbol.name} at ({r},{c}) not in FS weights",
+                )
                 found_non_empty = True
         self.assertTrue(found_non_empty, "Grid was not populated with any symbols.")
 
+
 # Ensure the script can be run directly
-if __name__ == '__main__':
-    unittest.main() 
+if __name__ == "__main__":
+    unittest.main()

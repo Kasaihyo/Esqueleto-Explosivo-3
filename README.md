@@ -1,19 +1,21 @@
 # Esqueleto Explosivo 3 Simulator
 
+
 This project is a Python-based simulator for a slot game inspired by Esqueleto Explosivo 3, based on the specifications in the `docs/` folder. It allows for simulating game spins, calculating RTP, analyzing hit frequency, and debugging game mechanics.
 
 ## Project Structure
 
 - `simulator/`: Contains the core Python code for the simulation engine.
-    - `main.py`: The original sequential simulation engine.
-    - `optimized.py`: The parallelized, hardware-accelerated simulation engine.
+    - `main.py`: Core simulation engine (single source of truth).
+    - `core/`: Grid, Symbols, RNG, etc. 100 % of gameplay logic now resides here.
+    - `tools/weight_optimizer.py`: CLI weight optimiser.
+    - `tools/benchmark_memory.py`: Memory-usage benchmark (< 1 GiB @ 10 M spins).
     - `config.py`: Configuration parameters (paytables, probabilities, feature settings).
-    - `core/`: Core game logic (Grid, Symbols, State, etc.).
 - `tests/`: Contains unit and integration tests for the simulator components.
 - `docs/`: Project documentation, including mathematical specifications (`GDD Math.md`), command references (`commands.md`), and other notes.
 - `simulation_results/`: Default output directory for simulation summary files and spin logs (CSV). This directory is created automatically.
-- `run.py`: Automatic hardware detection and optimal configuration script.
-- `run.sh`: Simple shell script for running the auto-optimized simulator.
+- `run.py`: Unified run script with hardware detection, automatic dependency installation, and ROE configuration.
+- *No need for separate run.sh or run_optimized_roe.sh; use `run.py` exclusively.*
 - `setup.py`: Script for package installation (allows `pip install -e .`).
 - `.gitignore`: Specifies intentionally untracked files that Git should ignore.
 - `README.md`: This file.
@@ -24,10 +26,10 @@ For the simplest experience with optimal performance:
 
 ```bash
 # Make the script executable (if needed)
-chmod +x run.sh
+chmod +x run.py
 
 # Run the auto-optimized simulator
-./run.sh
+./run.py
 ```
 
 The script will automatically:
@@ -63,10 +65,13 @@ The script will automatically:
 
 ```bash
 # Run with default settings (auto-detects hardware)
-./run.sh
+./run.py
 
 # Run with custom parameters
-./run.sh --spins 1000000 --bet 2.0
+./run.py --spins 1000000 --bet 2.0
+
+# Or with positional spins (alias for --spins)
+./run.py 1000000 --bet 2.0
 ```
 
 ### Standard Simulator

@@ -1,19 +1,25 @@
+# import os # F401 unused
+# import random # F401 unused
+# import sys # F401 unused
 import unittest
-import sys
-import os
-from unittest.mock import patch
+
+from simulator import config
+from simulator.core.grid import Grid
+from simulator.core.rng import SpinRNG
+from simulator.core.state import GameState
+
+# from simulator.core.symbol import Symbol, SymbolType # Symbol unused, SymbolType is used.
+from simulator.core.symbol import SymbolType
+from simulator.main import run_base_game_spin
+
+# from typing import Dict, List, Optional, Set, Tuple # F401 All unused
+# from unittest.mock import patch # F401 unused
+
+
 # Add project root to sys.path to allow absolute imports
 # project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 # sys.path.insert(0, project_root)
 
-import random
-from typing import List, Tuple, Optional, Set, Dict
-
-# Imports from simulator
-from simulator.core.grid import Grid
-from simulator.core.symbol import Symbol, SymbolType
-from simulator.core.state import GameState
-from simulator import config
 
 # Helper function to create a grid from names (copied from other test files)
 # def create_grid_from_names(names: List[List[Optional[str]]]) -> Grid:
@@ -31,8 +37,8 @@ from simulator import config
 # Dummy symbols for testing (Moved to setUpClass)
 # DUMMY_SYMBOLS: Dict[str, Symbol] = { ... }
 
-class TestBaseGameSequences(unittest.TestCase):
 
+class TestBaseGameSequences(unittest.TestCase):
     # @classmethod
     # def setUpClass(cls):
     #     \"\"\"Set up dummy symbols for the test class.\"\"\"
@@ -61,7 +67,7 @@ class TestBaseGameSequences(unittest.TestCase):
         game_state.initialize_spin()
         self.assertEqual(game_state.current_multiplier, 1)
         test_symbol = config.SYMBOLS["PINK_SK"]
-        clusters_found = [(test_symbol, [(0,0), (0,1), (0,2), (0,3), (0,4)])]
+        clusters_found = [(test_symbol, [(0, 0), (0, 1), (0, 2), (0, 3), (0, 4)])]
         game_state.update_after_clusters(clusters_found, did_explode=False)
         self.assertEqual(game_state.current_multiplier, 2)
         game_state.update_after_clusters(clusters_found, did_explode=False)
@@ -89,7 +95,7 @@ class TestBaseGameSequences(unittest.TestCase):
         game_state = GameState()
         game_state.initialize_spin()
         test_symbol = config.SYMBOLS["PINK_SK"]
-        clusters_found = [(test_symbol, [(0,0), (0,1), (0,2), (0,3), (0,4)])]
+        clusters_found = [(test_symbol, [(0, 0), (0, 1), (0, 2), (0, 3), (0, 4)])]
         for _ in range(5):
             game_state.update_after_clusters(clusters_found, did_explode=False)
         self.assertEqual(game_state.current_multiplier, 32)
@@ -104,7 +110,7 @@ class TestBaseGameSequences(unittest.TestCase):
         game_state = GameState()
         game_state.initialize_spin()
         test_symbol = config.SYMBOLS["PINK_SK"]
-        clusters_found = [(test_symbol, [(0,0), (0,1), (0,2), (0,3), (0,4)])]
+        clusters_found = [(test_symbol, [(0, 0), (0, 1), (0, 2), (0, 3), (0, 4)])]
         game_state.update_after_clusters(clusters_found, did_explode=False)
         game_state.update_after_clusters(clusters_found, did_explode=False)
         self.assertEqual(game_state.current_multiplier, 4)
@@ -187,102 +193,121 @@ class TestBaseGameSequences(unittest.TestCase):
         self.assertTrue(triggered_fs)
         self.assertEqual(spins_won, 16)
 
+
 # --- Tests for Scatter Accumulation Across Sequence --- #
+
 
 class TestScatterAccumulation(unittest.TestCase):
     """Tests for scatter accumulation during a spin sequence."""
-    
+
     def test_scatter_accumulation_across_sequence(self):
         """Test scatters counted correctly across initial drop and multiple avalanches."""
         # Setup a grid with some symbols including scatters
         state = GameState()
         grid = Grid(state)
-        
+
         # Set up initial grid with no scatters
         grid.initialize_spin()
-        
+
+        # Clear the grid to ensure no random scatters from initialize_spin interfere
+        for r_idx in range(grid.rows):
+            for c_idx in range(grid.cols):
+                grid._set_symbol(r_idx, c_idx, config.SYMBOLS["EMPTY"])
+        state.scatters_collected_this_sequence.clear()  # Also clear any scatters state might have picked up
+
         # Manually add scatters to simulate landed scatters
         # Replace some existing symbols with scatters
         for r, c in [(0, 0), (2, 2)]:
             grid._set_symbol(r, c, config.SYMBOLS["SCATTER"])
-            
+
         # Count scatters in initial grid and accumulate them
         for r in range(grid.rows):
             for c in range(grid.cols):
                 symbol = grid._get_symbol(r, c)
                 if symbol and symbol.type == SymbolType.SCATTER:
                     state.accumulate_scatter((r, c))
-        
+
         # Verify we have accumulated 2 scatters so far
         self.assertEqual(len(state.scatters_collected_this_sequence), 2)
-        
+
         # Simulate an avalanche where new scatters land
         # First we simulate a cluster forming and being cleared
-        mock_cluster = [(config.SYMBOLS["PINK_SK"], [(1, 1), (1, 2), (1, 3), (1, 4), (2, 4)])]
-        mock_cleared_coords, _, _, _ = grid.process_explosions_and_spawns(mock_cluster)
-        
+        mock_cluster = [
+            (config.SYMBOLS["PINK_SK"], [(1, 1), (1, 2), (1, 3), (1, 4), (2, 4)])
+        ]
+        mock_cleared_coords, _, _, _, _ = grid.process_explosions_and_spawns(
+            mock_cluster, set()
+        )
+
         # Apply the avalanche
         grid.apply_avalanche(state)
-        
+
         # Now add a new scatter that "landed" during the avalanche
         new_scatter_pos = (1, 1)
-        grid._set_symbol(new_scatter_pos[0], new_scatter_pos[1], config.SYMBOLS["SCATTER"])
+        grid._set_symbol(
+            new_scatter_pos[0], new_scatter_pos[1], config.SYMBOLS["SCATTER"]
+        )
         grid.landed_coords.add(new_scatter_pos)
-        
+
         # Accumulate this newly landed scatter
         symbol = grid._get_symbol(new_scatter_pos[0], new_scatter_pos[1])
         if symbol and symbol.type == SymbolType.SCATTER:
             state.accumulate_scatter(new_scatter_pos)
-            
+
         # Verify we now have a total of 3 scatters
         self.assertEqual(len(state.scatters_collected_this_sequence), 3)
-        
+
         # Simulate another avalanche with more scatters landing
-        mock_cluster2 = [(config.SYMBOLS["GREEN_SK"], [(3, 0), (3, 1), (3, 2), (3, 3), (3, 4)])]
-        mock_cleared_coords2, _, _, _ = grid.process_explosions_and_spawns(mock_cluster2)
-        
+        mock_cluster2 = [
+            (config.SYMBOLS["GREEN_SK"], [(3, 0), (3, 1), (3, 2), (3, 3), (3, 4)])
+        ]
+        mock_cleared_coords2, _, _, _, _ = grid.process_explosions_and_spawns(
+            mock_cluster2, set()
+        )
+
         # Apply second avalanche
         grid.apply_avalanche(state)
-        
+
         # Add two more scatters that "landed" during the second avalanche
         new_scatter_pos2 = [(3, 2), (3, 3)]
         for pos in new_scatter_pos2:
             grid._set_symbol(pos[0], pos[1], config.SYMBOLS["SCATTER"])
             grid.landed_coords.add(pos)
-            
+
             # Accumulate this newly landed scatter
             symbol = grid._get_symbol(pos[0], pos[1])
             if symbol and symbol.type == SymbolType.SCATTER:
                 state.accumulate_scatter(pos)
-                
+
         # Verify we now have a total of 5 scatters
         self.assertEqual(len(state.scatters_collected_this_sequence), 5)
-        
+
         # Finalize the spin sequence
         triggered_fs, spins_won = state.finalize_spin_sequence()
-        
+
         # Verify free spins were triggered with the correct number of spins
         self.assertTrue(triggered_fs)
         self.assertEqual(spins_won, 14)  # 12 base + (5-4)*2 = 14 spins
-        
+
     def test_scatter_deduplication(self):
         """Test that duplicate scatter coordinates aren't counted multiple times."""
         state = GameState()
-        
+
         # Accumulate the same scatter coordinate multiple times
         scatter_pos = (2, 3)
         state.accumulate_scatter(scatter_pos)
         state.accumulate_scatter(scatter_pos)
         state.accumulate_scatter(scatter_pos)
-        
+
         # Should only count as 1 scatter
         self.assertEqual(len(state.scatters_collected_this_sequence), 1)
-        
+
         # Add a different scatter coordinate
         state.accumulate_scatter((1, 1))
-        
+
         # Should now be 2 scatters
         self.assertEqual(len(state.scatters_collected_this_sequence), 2)
 
-if __name__ == '__main__':
-    unittest.main() 
+
+if __name__ == "__main__":
+    unittest.main()
