@@ -32,3 +32,30 @@ Thumbs.db
 
 # Simulation Results
 /simulation_results/
+    
+# Python packaging
+*.egg-info/
+ 
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# pytest cache
+.pytest_cache/
+
+# Coverage reports
+.coverage
+coverage.xml
+htmlcov/
+
+# mypy
+.mypy_cache/
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# Tox environments
+.tox/
